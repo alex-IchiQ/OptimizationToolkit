@@ -9,12 +9,14 @@
 #include "Toolset/Analyzer/Passes/InstancingCandidatePass.h"
 #include "Toolset/Analyzer/Passes/ProjectSettingsPass.h"
 #include "Toolset/Analyzer/Passes/BlueprintTickPass.h"
+#include "Toolset/Analyzer/Passes/TextureCompressionPass.h"
 
 #include "Toolset/Optimization/Fixes/EnableNaniteFix.h"
 #include "Toolset/Optimization/Fixes/GenerateLODsFix.h"
 #include "Toolset/Optimization/Fixes/SimpleCollisionFix.h"
 #include "Toolset/Optimization/Fixes/ReviewLightMobilityFix.h"
 #include "Toolset/Optimization/Fixes/ConvertToInstancesFix.h"
+#include "Toolset/Optimization/Fixes/TextureSettingsFixes.h"
 
 #include "Toolset/Cleanup/Actions/SaveDirtyPackagesAction.h"
 #include "Toolset/Cleanup/Actions/FixUpRedirectorsAction.h"
@@ -40,12 +42,15 @@ void FToolsetRegistry::RegisterDefaults()
 	AddPass(MakeUnique<FInstancingCandidatePass>());
 	AddPass(MakeUnique<FProjectSettingsPass>());
 	AddPass(MakeUnique<FBlueprintTickPass>());
+	AddPass(MakeUnique<FTextureCompressionPass>());
 
 	AddFix(MakeUnique<FEnableNaniteFix>());
 	AddFix(MakeUnique<FGenerateLODsFix>());
 	AddFix(MakeUnique<FSimpleCollisionFix>());
 	AddFix(MakeUnique<FReviewLightMobilityFix>());
 	AddFix(MakeUnique<FConvertToInstancesFix>());
+	AddFix(MakeUnique<FNormalmapCompressionFix>());
+	AddFix(MakeUnique<FDisableTextureSRGBFix>());
 
 	AddAction(MakeUnique<FSaveDirtyPackagesAction>());
 	AddAction(MakeUnique<FFixUpRedirectorsAction>());

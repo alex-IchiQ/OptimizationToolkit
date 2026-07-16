@@ -70,6 +70,14 @@ struct FFinding
 	TWeakObjectPtr<AActor> TargetActor;
 
 	/**
+	 * The asset this finding is really about, when it is an asset rather than a
+	 * placed actor (a texture, a material). TargetActor only says where to look
+	 * in the viewport; a fix that edits the asset needs the asset itself, and for
+	 * something like a texture there is no path from the actor back to it.
+	 */
+	TWeakObjectPtr<UObject> TargetAsset;
+
+	/**
 	 * Every actor this finding covers, when it describes a group rather than a
 	 * single offender (instancing candidates, for one). TargetActor is just the
 	 * one we frame; a fix that rewrites the group needs all of them, and

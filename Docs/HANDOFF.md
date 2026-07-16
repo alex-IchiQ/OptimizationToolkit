@@ -51,7 +51,9 @@ Working:
   (Undo/Redo) and the level auto-re-scans afterward. Fixes: `FEnableNaniteFix`,
   `FGenerateLODsFix`, `FSimpleCollisionFix`, `FReviewLightMobilityFix`,
   `FConvertToInstancesFix` (replaces a vetted group of repeated static-mesh
-  actors with one HISM actor; reads the group from `FFinding::RelatedActors`).
+  actors with one HISM actor; reads the group from `FFinding::RelatedActors`),
+  `FNormalmapCompressionFix` and `FDisableTextureSRGBFix` (edit the texture named
+  by `FFinding::TargetAsset`).
 - **Profile** *(functional)* — one-click `stat` command stacks (fps/unit/gpu/
   scenerendering/rhi/initviews/streaming/profilegpu/clear).
 - **Settings** *(functional)* — project-wide analyze thresholds under
