@@ -3,6 +3,7 @@
 #include "Toolset/Cleanup/Actions/DeleteUnusedAssetsAction.h"
 
 #include "ObjectTools.h"
+#include "GameMapsSettings.h"
 #include "AssetRegistry/ARFilter.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -10,6 +11,45 @@
 #include "Modules/ModuleManager.h"
 
 #define LOCTEXT_NAMESPACE "DeleteUnusedAssetsAction"
+
+namespace
+{
+	/**
+	 * Packages named by project settings rather than referenced by an asset.
+	 *
+	 * The default game mode, game instance and startup maps are stored as paths
+	 * in config, so nothing on disk references them: they look completely unused,
+	 * and deleting them leaves a project that no longer boots.
+	 */
+	TSet<FString> GatherPackagesNamedByProjectSettings()
+	{
+		TSet<FString> Packages;
+
+		const UGameMapsSettings* MapsSettings = GetDefault<UGameMapsSettings>();
+		if (!MapsSettings)
+		{
+			return Packages;
+		}
+
+		auto AddPath = [&Packages](const FSoftObjectPath& Path)
+		{
+			const FString PackageName = Path.GetLongPackageName();
+			if (!PackageName.IsEmpty())
+			{
+				Packages.Add(PackageName);
+			}
+		};
+
+		AddPath(MapsSettings->EditorStartupMap);
+		AddPath(MapsSettings->GameDefaultMap);
+		AddPath(MapsSettings->ServerDefaultMap);
+		AddPath(MapsSettings->TransitionMap);
+		AddPath(MapsSettings->GameInstanceClass);
+		AddPath(MapsSettings->GlobalDefaultGameMode);
+
+		return Packages;
+	}
+}
 
 FText FDeleteUnusedAssetsAction::GetTitle() const
 {
@@ -49,10 +89,18 @@ FText FDeleteUnusedAssetsAction::Execute() const
 	TArray<FAssetData> Assets;
 	AssetRegistry.GetAssets(Filter, Assets);
 
+	const TSet<FString> ConfigNamedPackages = GatherPackagesNamedByProjectSettings();
+
 	TArray<FAssetData> Unused;
 	for (const FAssetData& Asset : Assets)
 	{
 		const FString PackagePath = Asset.PackageName.ToString();
+
+		// Named by project settings instead of referenced by anything on disk.
+		if (ConfigNamedPackages.Contains(PackagePath))
+		{
+			continue;
+		}
 
 		// World Partition stores one package per actor under these folders. The
 		// map doesn't reference them the way a normal asset reference works, so
@@ -79,8 +127,14 @@ FText FDeleteUnusedAssetsAction::Execute() const
 			continue;
 		}
 
+		// EDependencyCategory::All rather than the default Package: Manage
+		// references are how the Asset Manager links a primary asset to the
+		// assets its rules pull in, and those never appear as package
+		// references. Asking only for Package references reports anything the
+		// Asset Manager owns as unused.
 		TArray<FName> Referencers;
-		AssetRegistry.GetReferencers(Asset.PackageName, Referencers);
+		AssetRegistry.GetReferencers(Asset.PackageName, Referencers,
+			UE::AssetRegistry::EDependencyCategory::All);
 		Referencers.Remove(Asset.PackageName);	// a package referencing itself proves nothing
 		if (Referencers.Num() > 0)
 		{
