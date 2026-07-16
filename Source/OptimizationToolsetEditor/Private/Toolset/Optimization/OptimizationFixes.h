@@ -24,3 +24,23 @@ public:
 	virtual bool IsSupported() const override;
 	virtual bool Apply(const FFinding& Finding) const override;
 };
+
+/** Adds a box primitive when needed and stops using render triangles as simple collision. */
+class FSimpleCollisionFix : public IOptimizationFix
+{
+public:
+	virtual FName GetId() const override { return TEXT("Fix_SimpleCollision"); }
+	virtual FText GetLabel() const override;
+	virtual bool IsSupported() const override;
+	virtual bool Apply(const FFinding& Finding) const override;
+};
+
+/** Changes the movable light behind a finding to Stationary after user review. */
+class FReviewLightMobilityFix : public IOptimizationFix
+{
+public:
+	virtual FName GetId() const override { return TEXT("Fix_ReviewLightMobility"); }
+	virtual FText GetLabel() const override;
+	virtual bool IsSupported() const override;
+	virtual bool Apply(const FFinding& Finding) const override;
+};

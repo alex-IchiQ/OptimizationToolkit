@@ -6,7 +6,10 @@
 #include "Editor.h"
 #include "GameFramework/Actor.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/LightComponent.h"
+#include "Engine/Light.h"
 #include "Engine/StaticMesh.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "StaticMeshEditorSubsystem.h"
 #include "ScopedTransaction.h"
 
@@ -110,6 +113,85 @@ bool FGenerateLODsFix::Apply(const FFinding& Finding) const
 
 	Subsystem->SetLodsWithNotification(Mesh, Options, /*bApplyChanges*/ true);
 	Mesh->MarkPackageDirty();
+	return true;
+}
+
+// ---------------------------------------------------------------------------
+// Simple collision
+// ---------------------------------------------------------------------------
+FText FSimpleCollisionFix::GetLabel() const
+{
+	return LOCTEXT("SimpleCollisionLabel", "Use Simple Collision");
+}
+
+bool FSimpleCollisionFix::IsSupported() const
+{
+	return GEditor != nullptr;
+}
+
+bool FSimpleCollisionFix::Apply(const FFinding& Finding) const
+{
+	UStaticMesh* Mesh = MeshFromFinding(Finding);
+	UBodySetup* BodySetup = Mesh ? Mesh->GetBodySetup() : nullptr;
+	UStaticMeshEditorSubsystem* Subsystem =
+		GEditor ? GEditor->GetEditorSubsystem<UStaticMeshEditorSubsystem>() : nullptr;
+	if (!Mesh || !BodySetup || !Subsystem ||
+		BodySetup->CollisionTraceFlag != ECollisionTraceFlag::CTF_UseComplexAsSimple)
+	{
+		return false;
+	}
+
+	FScopedTransaction Transaction(LOCTEXT("SimpleCollisionTx", "Use Simple Collision"));
+	Mesh->Modify();
+	BodySetup->Modify();
+
+	// Preserve existing authored primitives. If none exist, add a generated box
+	// so switching away from per-poly collision cannot leave the mesh non-colliding.
+	if (Subsystem->GetSimpleCollisionCount(Mesh) == 0)
+	{
+		const int32 PrimitiveIndex = Subsystem->AddSimpleCollisionsWithNotification(
+			Mesh, EScriptCollisionShapeType::Box, /*bApplyChanges*/ false);
+		if (PrimitiveIndex == INDEX_NONE)
+		{
+			Transaction.Cancel();
+			return false;
+		}
+	}
+
+	BodySetup->CollisionTraceFlag = ECollisionTraceFlag::CTF_UseDefault;
+	Mesh->PostEditChange();
+	Mesh->MarkPackageDirty();
+	return true;
+}
+
+// ---------------------------------------------------------------------------
+// Light mobility
+// ---------------------------------------------------------------------------
+FText FReviewLightMobilityFix::GetLabel() const
+{
+	return LOCTEXT("ReviewLightMobilityLabel", "Set Stationary");
+}
+
+bool FReviewLightMobilityFix::IsSupported() const
+{
+	return GEditor != nullptr;
+}
+
+bool FReviewLightMobilityFix::Apply(const FFinding& Finding) const
+{
+	ALight* Light = Cast<ALight>(Finding.TargetActor.Get());
+	ULightComponent* LightComponent = Light ? Light->GetLightComponent() : nullptr;
+	if (!Light || !LightComponent || LightComponent->Mobility != EComponentMobility::Movable)
+	{
+		return false;
+	}
+
+	const FScopedTransaction Transaction(LOCTEXT("ReviewLightMobilityTx", "Set Light Stationary"));
+	Light->Modify();
+	LightComponent->Modify();
+	LightComponent->SetMobility(EComponentMobility::Stationary);
+	Light->PostEditChange();
+	Light->MarkPackageDirty();
 	return true;
 }
 

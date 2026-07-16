@@ -21,6 +21,8 @@ void FToolsetRegistry::RegisterDefaults()
 
 	AddFix(MakeUnique<FEnableNaniteFix>());
 	AddFix(MakeUnique<FGenerateLODsFix>());
+	AddFix(MakeUnique<FSimpleCollisionFix>());
+	AddFix(MakeUnique<FReviewLightMobilityFix>());
 }
 
 void FToolsetRegistry::AddPass(TUniquePtr<IAnalyzePass> Pass)

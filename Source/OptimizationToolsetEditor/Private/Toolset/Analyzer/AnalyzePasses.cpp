@@ -107,8 +107,7 @@ void FStaticMeshPass::Run(UWorld* World, const FAnalyzeThresholds& T, FScanResul
 
 void FLightingPass::Run(UWorld* World, const FAnalyzeThresholds& T, FScanResult& Out) const
 {
-	int32 MovableLights = 0;
-	AActor* FirstMovable = nullptr;
+	TArray<ALight*> MovableLights;
 
 	for (TActorIterator<ALight> It(World); It; ++It)
 	{
@@ -118,21 +117,31 @@ void FLightingPass::Run(UWorld* World, const FAnalyzeThresholds& T, FScanResult&
 		ULightComponent* LC = Light->GetLightComponent();
 		if (LC && LC->Mobility == EComponentMobility::Movable)
 		{
-			++MovableLights;
-			if (!FirstMovable)
-			{
-				FirstMovable = Light;
-			}
+			MovableLights.Add(Light);
 		}
 	}
 
-	if (MovableLights > T.MovableLightBudget)
+	if (MovableLights.Num() <= T.MovableLightBudget)
 	{
-		FFinding F(ESeverity::Major, ECategory::Lighting, LOCTEXT("TooManyMovableTitle", "High number of movable (dynamic) lights"),
-			FText::Format(LOCTEXT("MovableLightSubject", "{0} movable lights"), FText::AsNumber(MovableLights)));
-		F.WhyItMatters = LOCTEXT("TooManyMovableWhy", "Every movable light adds dynamic shadow and lighting cost each frame.");
-		F.HowToFix = LOCTEXT("TooManyMovableFix", "Set static geometry lights to Static/Stationary where dynamics aren't needed.");
-		F.TargetActor = FirstMovable;
+		return;
+	}
+
+	const FText BudgetContext = FText::Format(
+		LOCTEXT("MovableLightBudgetContext", "The level contains {0} movable lights; the configured budget is {1}."),
+		FText::AsNumber(MovableLights.Num()), FText::AsNumber(T.MovableLightBudget));
+
+	// Emit addressable findings so Focus and Apply operate on the light the user
+	// is reviewing instead of an arbitrary actor from an aggregate warning.
+	for (ALight* Light : MovableLights)
+	{
+		FFinding F(ESeverity::Major, ECategory::Lighting,
+			LOCTEXT("MovableLightTitle", "Movable light contributes to an exceeded budget"),
+			FText::FromString(Light->GetActorLabel()));
+		F.WhyItMatters = FText::Format(
+			LOCTEXT("MovableLightWhy", "{0} Every movable light adds dynamic shadow and lighting cost each frame."),
+			BudgetContext);
+		F.HowToFix = LOCTEXT("MovableLightFix", "If this light does not move at runtime, change it to Stationary.");
+		F.TargetActor = Light;
 		F.FixId = TEXT("Fix_ReviewLightMobility");
 		Out.Findings.Add(MoveTemp(F));
 	}
