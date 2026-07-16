@@ -732,11 +732,164 @@ TSharedRef<SWidget> SToolsetWindow::BuildCleanupPanel()
 				SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle").AutoWrapText(true)
 				.Text(LOCTEXT("CleanHint", "Project-wide operations. Unlike Optimize fixes these are not Undo-able, so anything that rewrites assets asks first."))
 			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 10))
+			[
+				BuildProjectSizeCard()
+			]
 			+ SVerticalBox::Slot().AutoHeight()
 			[
 				Cards
 			]
 		];
+}
+
+TSharedRef<SWidget> SToolsetWindow::BuildProjectSizeCard()
+{
+	return SNew(SBorder)
+		.BorderImage(Brush("Toolset.Card"))
+		.Padding(FMargin(18, 16))
+		[
+			SNew(SVerticalBox)
+
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(SHorizontalBox)
+
+				+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight()
+					[
+						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Heading").Text(LOCTEXT("SizeTitle", "Project size"))
+					]
+					+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 6, 12, 0))
+					[
+						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Body").AutoWrapText(true)
+						.Text_Lambda([this]()
+						{
+							if (!bHasSizeReport)
+							{
+								return LOCTEXT("SizeNotRun", "Measures every package under /Game on disk, grouped by asset type. Walks the whole project, so it runs on demand.");
+							}
+							if (SizeReport.bRegistryIncomplete)
+							{
+								return LOCTEXT("SizeIncomplete", "The asset registry is still scanning the project — the numbers would be short. Try again once it finishes.");
+							}
+							return FText::Format(
+								LOCTEXT("SizeSummary", "{0} across {1} packages  •  measured in {2} ms"),
+								FText::AsMemory(SizeReport.TotalBytes),
+								FText::AsNumber(SizeReport.PackageCount),
+								FText::AsNumber(FMath::RoundToInt(SizeReport.ComputeSeconds * 1000.0)));
+						})
+					]
+				]
+
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				[
+					SNew(SButton)
+					.ButtonStyle(&S(), "Toolset.Button.Primary")
+					.OnClicked(this, &SToolsetWindow::OnComputeProjectSize)
+					[
+						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.NavLabel")
+						.ColorAndOpacity(FSlateColor(FLinearColor(FColor(0x16, 0x17, 0x19))))
+						.Text_Lambda([this]()
+						{
+							return bHasSizeReport ? LOCTEXT("SizeRefresh", "Refresh") : LOCTEXT("SizeMeasure", "Measure");
+						})
+					]
+				]
+			]
+
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 14, 0, 0))
+			[
+				SAssignNew(SizeBreakdownBox, SVerticalBox)
+			]
+		];
+}
+
+FReply SToolsetWindow::OnComputeProjectSize()
+{
+	FScopedSlowTask SlowTask(0.0f, LOCTEXT("MeasuringSize", "Measuring project size..."));
+	SlowTask.MakeDialog();
+
+	SizeReport = FProjectSizeReport::Compute();
+	bHasSizeReport = true;
+	RebuildSizeBreakdown();
+	return FReply::Handled();
+}
+
+void SToolsetWindow::RebuildSizeBreakdown()
+{
+	if (!SizeBreakdownBox.IsValid())
+	{
+		return;
+	}
+
+	SizeBreakdownBox->ClearChildren();
+	if (SizeReport.TotalBytes <= 0)
+	{
+		return;
+	}
+
+	// A long tail of tiny classes is noise; show the heavy hitters and roll the
+	// rest into one row so the totals still add up.
+	const int32 MaxRows = 10;
+	const int32 RowCount = FMath::Min(MaxRows, SizeReport.Entries.Num());
+
+	int64 ShownBytes = 0;
+	for (int32 Index = 0; Index < RowCount; ++Index)
+	{
+		const FProjectSizeEntry& Entry = SizeReport.Entries[Index];
+		ShownBytes += Entry.TotalBytes;
+
+		const float Fraction = static_cast<float>(
+			static_cast<double>(Entry.TotalBytes) / static_cast<double>(SizeReport.TotalBytes));
+
+		SizeBreakdownBox->AddSlot().AutoHeight().Padding(FMargin(0, 0, 0, 8))
+		[
+			SNew(SVerticalBox)
+
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
+				[
+					SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Body")
+					.Text(FText::Format(LOCTEXT("SizeRowName", "{0}  ({1})"),
+						FText::FromName(Entry.ClassName), FText::AsNumber(Entry.PackageCount)))
+				]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				[
+					SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle")
+					.Text(FText::Format(LOCTEXT("SizeRowValue", "{0}  ·  {1}%"),
+						FText::AsMemory(Entry.TotalBytes),
+						FText::AsNumber(FMath::RoundToInt(Fraction * 100.0f))))
+				]
+			]
+
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4, 0, 0))
+			[
+				SNew(SBox).HeightOverride(4)
+				[
+					SNew(SProgressBar)
+					.Percent(Fraction)
+					.FillColorAndOpacity(FSlateColor(FToolsetStyle::Accent))
+				]
+			]
+		];
+	}
+
+	const int64 RemainingBytes = SizeReport.TotalBytes - ShownBytes;
+	const int32 RemainingClasses = SizeReport.Entries.Num() - RowCount;
+	if (RemainingClasses > 0 && RemainingBytes > 0)
+	{
+		SizeBreakdownBox->AddSlot().AutoHeight().Padding(FMargin(0, 2, 0, 0))
+		[
+			SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle")
+			.Text(FText::Format(LOCTEXT("SizeRemainder", "+ {0} more asset types  ·  {1}"),
+				FText::AsNumber(RemainingClasses), FText::AsMemory(RemainingBytes)))
+		];
+	}
 }
 
 TSharedRef<SWidget> SToolsetWindow::MakeCleanupActionCard(const ICleanupAction& Action)

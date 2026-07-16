@@ -50,9 +50,12 @@ Working:
 - **Settings** *(functional)* — project-wide analyze thresholds under
   **Project Settings → Plugins → Optimization Toolset**.
 
-- **Cleanup** *(functional)* — registry-driven project-wide actions, each a card
-  with a Run button and a last-run summary. Destructive ones are tagged and
-  confirm first. Actions: `FSaveDirtyPackagesAction`, `FFixUpRedirectorsAction`.
+- **Cleanup** *(functional)* — a **project size** card (on-demand `FProjectSizeReport`:
+  measures every package under /Game on disk, grouped by asset class, top 10 with
+  bars plus a rolled-up tail), then registry-driven project-wide actions, each a
+  card with a Run button and a last-run summary. Destructive ones are tagged
+  "NOT UNDOABLE" and confirm first. Actions: `FSaveDirtyPackagesAction`,
+  `FFixUpRedirectorsAction`.
 
 Placeholder panels (structured, list planned actions, not yet implemented):
 - **Reports** — CSV/JSON export, before/after snapshots.
@@ -66,10 +69,15 @@ Ordered by suggested priority:
    compatibility check before replacing actors.
 2. **More analyze passes** — shader instruction counts (version/platform-aware)
    and Blueprints.
-3. **More cleanup actions** — project size breakdown by asset type (read-only,
-   needs a dedicated card rather than a Run button), delete unused assets
-   (destructive: needs a preview list + confirmation), project-settings audit
-   (arguably an analyze pass under `ECategory::Project` instead of an action).
+3. **Delete unused assets** — the remaining Cleanup item, and the most dangerous
+   thing in the plugin. Unreferenced != unused: soft paths, config strings and
+   Blueprint lookups don't show up as references. Plan: find candidates via
+   `IAssetRegistry::GetReferencers` (excluding maps and anything referenced),
+   show a **preview list** the user can review, and delete through
+   `ObjectTools::DeleteAssets` so UE's own reference check and source-control
+   flow run rather than a hand-rolled delete. Also worth adding: a
+   project-settings audit (arguably an analyze pass under `ECategory::Project`
+   rather than an action).
 4. **Reports panel** — CSV/JSON export of `FScanResult`, before/after snapshots.
    `FFinding::TypeId` is the stable column to group and diff on.
 5. **Ship prep** — `Resources/Icon128.png` is missing (plugin browser + FAB), and

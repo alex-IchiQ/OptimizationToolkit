@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Toolset/ToolsetTypes.h"
 #include "Toolset/Analyzer/LevelAnalyzer.h"
+#include "Toolset/Cleanup/ProjectSizeReport.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/Views/SListView.h"
 
@@ -78,6 +79,9 @@ private:
 	// ---- Cleanup ------------------------------------------------------------
 	TSharedRef<SWidget> MakeCleanupActionCard(const ICleanupAction& Action);
 	FReply OnRunCleanupAction(const ICleanupAction* Action);
+	TSharedRef<SWidget> BuildProjectSizeCard();
+	FReply OnComputeProjectSize();
+	void RebuildSizeBreakdown();
 
 	// ---- Bound getters (drive live text) -----------------------------------
 	FText GetHeaderTitle() const;
@@ -110,4 +114,9 @@ private:
 
 	// Cleanup: last run summary per action id, shown on its card.
 	TMap<FName, FText> CleanupResults;
+
+	// Cleanup: project size breakdown, computed on demand (it walks every package).
+	FProjectSizeReport SizeReport;
+	bool bHasSizeReport = false;
+	TSharedPtr<SVerticalBox> SizeBreakdownBox;
 };
