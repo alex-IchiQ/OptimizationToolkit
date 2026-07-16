@@ -7,6 +7,7 @@
 #include "Toolset/Analyzer/Passes/MaterialPass.h"
 #include "Toolset/Analyzer/Passes/LightingPass.h"
 #include "Toolset/Analyzer/Passes/InstancingCandidatePass.h"
+#include "Toolset/Analyzer/Passes/ProjectSettingsPass.h"
 
 #include "Toolset/Optimization/Fixes/EnableNaniteFix.h"
 #include "Toolset/Optimization/Fixes/GenerateLODsFix.h"
@@ -36,6 +37,7 @@ void FToolsetRegistry::RegisterDefaults()
 	AddPass(MakeUnique<FMaterialPass>());
 	AddPass(MakeUnique<FLightingPass>());
 	AddPass(MakeUnique<FInstancingCandidatePass>());
+	AddPass(MakeUnique<FProjectSettingsPass>());
 
 	AddFix(MakeUnique<FEnableNaniteFix>());
 	AddFix(MakeUnique<FGenerateLODsFix>());
