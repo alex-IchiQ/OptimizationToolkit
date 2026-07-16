@@ -988,8 +988,9 @@ FReply SToolsetWindow::OnRunCleanupAction(const ICleanupAction* Action)
 	}
 
 	// These rewrite assets and no transaction can take them back, so make the
-	// user say yes before anything touches the project.
-	if (Action->IsDestructive())
+	// user say yes before anything touches the project — unless the action runs
+	// a better review of its own.
+	if (Action->NeedsConfirmation())
 	{
 		const FText Message = FText::Format(
 			LOCTEXT("ConfirmDestructive", "{0}\n\n{1}\n\nThis cannot be undone. Continue?"),

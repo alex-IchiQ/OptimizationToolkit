@@ -56,8 +56,9 @@ Working:
   measures every package under /Game on disk, grouped by asset class, top 10 with
   bars plus a rolled-up tail), then registry-driven project-wide actions, each a
   card with a Run button and a last-run summary. Destructive ones are tagged
-  "NOT UNDOABLE" and confirm first. Actions: `FSaveDirtyPackagesAction`,
-  `FFixUpRedirectorsAction`.
+  "NOT UNDOABLE" and confirm first, unless they run a better review themselves
+  (`NeedsConfirmation()`). Actions: `FSaveDirtyPackagesAction`,
+  `FFixUpRedirectorsAction`, `FDeleteUnusedAssetsAction`.
 
 Placeholder panels (structured, list planned actions, not yet implemented):
 - **Reports** — CSV/JSON export, before/after snapshots.
@@ -73,15 +74,8 @@ Ordered by suggested priority:
    flagging structural fixes so bulk apply doesn't restructure a level silently.
 2. **More analyze passes** — shader instruction counts (version/platform-aware)
    and Blueprints.
-3. **Delete unused assets** — the remaining Cleanup item, and the most dangerous
-   thing in the plugin. Unreferenced != unused: soft paths, config strings and
-   Blueprint lookups don't show up as references. Plan: find candidates via
-   `IAssetRegistry::GetReferencers` (excluding maps and anything referenced),
-   show a **preview list** the user can review, and delete through
-   `ObjectTools::DeleteAssets` so UE's own reference check and source-control
-   flow run rather than a hand-rolled delete. Also worth adding: a
-   project-settings audit (arguably an analyze pass under `ECategory::Project`
-   rather than an action).
+3. **Project-settings audit** — arguably an analyze pass under `ECategory::Project`
+   (currently unused) rather than a cleanup action.
 4. **Reports panel** — CSV/JSON export of `FScanResult`, before/after snapshots.
    `FFinding::TypeId` is the stable column to group and diff on.
 5. **Ship prep** — `Resources/Icon128.png` is missing (plugin browser + FAB), and

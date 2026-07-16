@@ -33,8 +33,15 @@ public:
 	/** Text on the run button, e.g. "Fix up". */
 	virtual FText GetButtonLabel() const = 0;
 
-	/** True when the action rewrites or removes assets: the panel confirms first. */
+	/** True when the action rewrites or removes assets. Tags the card as not undoable. */
 	virtual bool IsDestructive() const { return false; }
+
+	/**
+	 * Whether the panel should put its own confirmation in front of Execute().
+	 * Defaults to IsDestructive(); override to false when Execute() already runs
+	 * a better review of its own, so the user isn't asked the same thing twice.
+	 */
+	virtual bool NeedsConfirmation() const { return IsDestructive(); }
 
 	/** Runtime availability on the current engine / project state. */
 	virtual bool IsSupported() const { return true; }
