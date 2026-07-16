@@ -13,6 +13,9 @@
 #include "Toolset/Optimization/Fixes/SimpleCollisionFix.h"
 #include "Toolset/Optimization/Fixes/ReviewLightMobilityFix.h"
 
+#include "Toolset/Cleanup/Actions/SaveDirtyPackagesAction.h"
+#include "Toolset/Cleanup/Actions/FixUpRedirectorsAction.h"
+
 FToolsetRegistry& FToolsetRegistry::Get()
 {
 	static FToolsetRegistry Instance;
@@ -24,6 +27,7 @@ void FToolsetRegistry::RegisterDefaults()
 	// Clear first so a live-coding / module reload doesn't stack duplicates.
 	Passes.Reset();
 	Fixes.Reset();
+	Actions.Reset();
 
 	AddPass(MakeUnique<FStaticMeshPass>());
 	AddPass(MakeUnique<FTexturePass>());
@@ -35,6 +39,9 @@ void FToolsetRegistry::RegisterDefaults()
 	AddFix(MakeUnique<FGenerateLODsFix>());
 	AddFix(MakeUnique<FSimpleCollisionFix>());
 	AddFix(MakeUnique<FReviewLightMobilityFix>());
+
+	AddAction(MakeUnique<FSaveDirtyPackagesAction>());
+	AddAction(MakeUnique<FFixUpRedirectorsAction>());
 }
 
 void FToolsetRegistry::AddPass(TUniquePtr<IAnalyzePass> Pass)
@@ -50,6 +57,14 @@ void FToolsetRegistry::AddFix(TUniquePtr<IOptimizationFix> Fix)
 	if (Fix)
 	{
 		Fixes.Add(MoveTemp(Fix));
+	}
+}
+
+void FToolsetRegistry::AddAction(TUniquePtr<ICleanupAction> Action)
+{
+	if (Action)
+	{
+		Actions.Add(MoveTemp(Action));
 	}
 }
 

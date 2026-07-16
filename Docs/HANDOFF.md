@@ -50,8 +50,11 @@ Working:
 - **Settings** *(functional)* — project-wide analyze thresholds under
   **Project Settings → Plugins → Optimization Toolset**.
 
+- **Cleanup** *(functional)* — registry-driven project-wide actions, each a card
+  with a Run button and a last-run summary. Destructive ones are tagged and
+  confirm first. Actions: `FSaveDirtyPackagesAction`, `FFixUpRedirectorsAction`.
+
 Placeholder panels (structured, list planned actions, not yet implemented):
-- **Cleanup** — project size, fix redirectors, save all, delete unused, settings audit.
 - **Reports** — CSV/JSON export, before/after snapshots.
 
 ## Roadmap / next steps
@@ -63,9 +66,14 @@ Ordered by suggested priority:
    compatibility check before replacing actors.
 2. **More analyze passes** — shader instruction counts (version/platform-aware)
    and Blueprints.
-3. **Cleanup panel** — project size breakdown, fix redirectors, delete unused,
-   project-settings audit.
+3. **More cleanup actions** — project size breakdown by asset type (read-only,
+   needs a dedicated card rather than a Run button), delete unused assets
+   (destructive: needs a preview list + confirmation), project-settings audit
+   (arguably an analyze pass under `ECategory::Project` instead of an action).
 4. **Reports panel** — CSV/JSON export of `FScanResult`, before/after snapshots.
+   `FFinding::TypeId` is the stable column to group and diff on.
+5. **Ship prep** — `Resources/Icon128.png` is missing (plugin browser + FAB), and
+   `.uplugin` has empty `CreatedBy` / `DocsURL` / `SupportURL`.
 
 ## Build / run
 

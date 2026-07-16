@@ -10,6 +10,7 @@
 
 class SWidgetSwitcher;
 class SSearchBox;
+class ICleanupAction;
 
 /** Top-level sections shown in the left sidebar. */
 enum class EToolsetSection : uint8
@@ -48,6 +49,7 @@ private:
 	TSharedRef<SWidget> BuildAnalyzePanel();
 	TSharedRef<SWidget> BuildOptimizePanel();
 	TSharedRef<SWidget> BuildProfilePanel();
+	TSharedRef<SWidget> BuildCleanupPanel();
 	TSharedRef<SWidget> BuildPlaceholderPanel(const FText& Title, const FText& Body, const TArray<FText>& PlannedActions);
 
 	// ---- Small reusable pieces ---------------------------------------------
@@ -72,6 +74,10 @@ private:
 	void ApplyFix(TSharedPtr<FFinding> Finding);
 	FReply OnApplyAllFixes();
 	TSharedRef<ITableRow> OnGenerateFixRow(TSharedPtr<FFinding> Item, const TSharedRef<STableViewBase>& OwnerTable);
+
+	// ---- Cleanup ------------------------------------------------------------
+	TSharedRef<SWidget> MakeCleanupActionCard(const ICleanupAction& Action);
+	FReply OnRunCleanupAction(const ICleanupAction* Action);
 
 	// ---- Bound getters (drive live text) -----------------------------------
 	FText GetHeaderTitle() const;
@@ -101,4 +107,7 @@ private:
 	// Filters.
 	FString SearchFilter;
 	TSet<ESeverity> EnabledSeverities = { ESeverity::Critical, ESeverity::Major, ESeverity::Minor };
+
+	// Cleanup: last run summary per action id, shown on its card.
+	TMap<FName, FText> CleanupResults;
 };

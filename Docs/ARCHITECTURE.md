@@ -31,6 +31,8 @@ Public/Toolset/
     LevelAnalyzer.h    FLevelAnalyzer (drives passes)
   Optimization/
     IOptimizationFix.h
+  Cleanup/
+    ICleanupAction.h
 Private/Toolset/
   ToolsetRegistry.cpp  Get() + RegisterDefaults() (the one place features are listed)
   ToolsetStyle.cpp
@@ -43,6 +45,9 @@ Private/Toolset/
     Fixes/             one file per fix: EnableNaniteFix, GenerateLODsFix,
                        SimpleCollisionFix, ReviewLightMobilityFix
                        + FixUtils.h (shared MeshFromFinding helper)
+  Cleanup/
+    Actions/           one file per action: SaveDirtyPackagesAction,
+                       FixUpRedirectorsAction
 Resources/
   *.svg (white, one per nav section), vera.png (mascot)
 ```
@@ -59,7 +64,8 @@ each other or the UI.**
 ```
 IAnalyzePass      Run(context, thresholds, out)          → appends FFindings (read-only)
 IOptimizationFix  GetId / GetLabel / IsSupported / Apply → resolves findings, transactional
-FToolsetRegistry  GetPasses() / GetFixes() / FindFix(FixId) / RegisterDefaults()
+ICleanupAction    GetId / GetTitle / IsDestructive / Execute → project-wide, NOT undoable
+FToolsetRegistry  GetPasses() / GetFixes() / GetActions() / FindFix(FixId) / RegisterDefaults()
 ```
 
 - `FLevelAnalyzer::AnalyzeCurrentLevel()` walks the world **once** into an
@@ -137,6 +143,23 @@ That's it — the window picks it up; no UI changes.
 
 The Optimize panel then shows any finding whose `FixId` matches, with an Apply
 button labelled by `GetLabel()`. After Apply the window re-scans automatically.
+
+## How to add a cleanup action
+
+Same shape, but an action isn't tied to a finding — it operates on the whole
+project, and **nothing here is Undo-able** (no transaction can take back a
+resaved or deleted asset).
+
+1. Add `Private/Toolset/Cleanup/Actions/DeleteUnusedAction.h` implementing
+   `ICleanupAction`: `GetId`, `GetTitle`, `GetDescription`, `GetButtonLabel`,
+   and `Execute()` returning a human-readable summary ("Fixed up 12 redirectors").
+2. Override `IsDestructive()` to return true if it rewrites or removes assets —
+   the panel then shows a "NOT UNDOABLE" tag and confirms before running.
+3. Register it: `AddAction(MakeUnique<FDeleteUnusedAction>());` in `RegisterDefaults()`.
+
+`Execute()` should stay honest about partial results: report what actually
+happened rather than what was attempted (see `FSaveDirtyPackagesAction`, which
+re-queries dirty packages afterwards instead of trusting the return value).
 
 ## Naming conventions (enforced)
 

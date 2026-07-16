@@ -7,6 +7,8 @@
 
 #include "Editor.h"
 #include "Engine/World.h"
+#include "Misc/MessageDialog.h"
+#include "Misc/ScopedSlowTask.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
 
@@ -295,13 +297,6 @@ TSharedRef<SWidget> SToolsetWindow::BuildHeader()
 // ---------------------------------------------------------------------------
 TSharedRef<SWidget> SToolsetWindow::BuildContent()
 {
-	TArray<FText> CleanupActions = {
-		LOCTEXT("ClnAct1", "Project size breakdown by asset type"),
-		LOCTEXT("ClnAct2", "Fix up redirectors across the project"),
-		LOCTEXT("ClnAct3", "Save all dirty packages"),
-		LOCTEXT("ClnAct4", "Find & delete unused assets (with confirmation)"),
-		LOCTEXT("ClnAct5", "Audit project settings for shipping"),
-	};
 	TArray<FText> ReportActions = {
 		LOCTEXT("RepAct1", "Export findings to CSV / JSON"),
 		LOCTEXT("RepAct2", "Before / after snapshots to prove wins"),
@@ -313,10 +308,7 @@ TSharedRef<SWidget> SToolsetWindow::BuildContent()
 	ContentSwitcher->AddSlot()[ BuildAnalyzePanel() ];     // Analyze
 	ContentSwitcher->AddSlot()[ BuildOptimizePanel() ];    // Optimize
 	ContentSwitcher->AddSlot()[ BuildProfilePanel() ];     // Profile
-	ContentSwitcher->AddSlot()[ BuildPlaceholderPanel(     // Cleanup
-		LOCTEXT("CleanupTitle", "Project hygiene & cleanup"),
-		LOCTEXT("CleanupBody", "Keep the project lean and packaging predictable."),
-		CleanupActions) ];
+	ContentSwitcher->AddSlot()[ BuildCleanupPanel() ];    // Cleanup
 	ContentSwitcher->AddSlot()[ BuildPlaceholderPanel(     // Reports
 		LOCTEXT("ReportsTitle", "Reports & exports"),
 		LOCTEXT("ReportsBody", "Turn a scan into a shareable report."),
@@ -707,6 +699,152 @@ TSharedRef<ITableRow> SToolsetWindow::OnGenerateFixRow(TSharedPtr<FFinding> Item
 				]
 			]
 		];
+}
+
+// ---------------------------------------------------------------------------
+// Cleanup (registry-driven project-wide actions)
+// ---------------------------------------------------------------------------
+TSharedRef<SWidget> SToolsetWindow::BuildCleanupPanel()
+{
+	TSharedRef<SVerticalBox> Cards = SNew(SVerticalBox);
+	for (const TUniquePtr<ICleanupAction>& Action : FToolsetRegistry::Get().GetActions())
+	{
+		if (Action && Action->IsSupported())
+		{
+			Cards->AddSlot().AutoHeight().Padding(FMargin(0, 0, 0, 10))
+			[
+				MakeCleanupActionCard(*Action)
+			];
+		}
+	}
+
+	return SNew(SScrollBox)
+		+ SScrollBox::Slot().Padding(FMargin(22, 20))
+		[
+			SNew(SVerticalBox)
+
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Heading").Text(LOCTEXT("CleanHeading", "Project hygiene"))
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4, 0, 16))
+			[
+				SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle").AutoWrapText(true)
+				.Text(LOCTEXT("CleanHint", "Project-wide operations. Unlike Optimize fixes these are not Undo-able, so anything that rewrites assets asks first."))
+			]
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				Cards
+			]
+		];
+}
+
+TSharedRef<SWidget> SToolsetWindow::MakeCleanupActionCard(const ICleanupAction& Action)
+{
+	const ICleanupAction* ActionPtr = &Action;	// registry owns it; outlives the widget
+	const FName ActionId = Action.GetId();
+
+	return SNew(SBorder)
+		.BorderImage(Brush("Toolset.Card"))
+		.Padding(FMargin(18, 16))
+		[
+			SNew(SVerticalBox)
+
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(SHorizontalBox)
+
+				+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight()
+					[
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+						[
+							SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Heading").Text(Action.GetTitle())
+						]
+						+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(8, 0, 0, 0))
+						[
+							SNew(SBorder)
+							.BorderImage(Brush("Toolset.Pill"))
+							.BorderBackgroundColor(FSlateColor(FLinearColor(
+								FToolsetStyle::SeverityMajor.R, FToolsetStyle::SeverityMajor.G, FToolsetStyle::SeverityMajor.B, 0.18f)))
+							.Padding(FMargin(8, 2))
+							.Visibility(Action.IsDestructive() ? EVisibility::Visible : EVisibility::Collapsed)
+							[
+								SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle")
+								.Text(LOCTEXT("NotUndoable", "NOT UNDOABLE"))
+								.ColorAndOpacity(FSlateColor(FToolsetStyle::SeverityMajor))
+							]
+						]
+					]
+					+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 6, 12, 0))
+					[
+						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Body").AutoWrapText(true)
+						.Text(Action.GetDescription())
+					]
+				]
+
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				[
+					SNew(SButton)
+					.ButtonStyle(&S(), "Toolset.Button.Primary")
+					.OnClicked(this, &SToolsetWindow::OnRunCleanupAction, ActionPtr)
+					[
+						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.NavLabel")
+						.ColorAndOpacity(FSlateColor(FLinearColor(FColor(0x16, 0x17, 0x19))))
+						.Text(Action.GetButtonLabel())
+					]
+				]
+			]
+
+			// Last run summary, only once this action has been run.
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 12, 0, 0))
+			[
+				SNew(STextBlock)
+				.TextStyle(&S(), "Toolset.Text.Body")
+				.AutoWrapText(true)
+				.ColorAndOpacity(FSlateColor(FToolsetStyle::SeverityGood))
+				.Visibility_Lambda([this, ActionId]()
+				{
+					return CleanupResults.Contains(ActionId) ? EVisibility::Visible : EVisibility::Collapsed;
+				})
+				.Text_Lambda([this, ActionId]()
+				{
+					const FText* Result = CleanupResults.Find(ActionId);
+					return Result ? *Result : FText::GetEmpty();
+				})
+			]
+		];
+}
+
+FReply SToolsetWindow::OnRunCleanupAction(const ICleanupAction* Action)
+{
+	if (!Action)
+	{
+		return FReply::Handled();
+	}
+
+	// These rewrite assets and no transaction can take them back, so make the
+	// user say yes before anything touches the project.
+	if (Action->IsDestructive())
+	{
+		const FText Message = FText::Format(
+			LOCTEXT("ConfirmDestructive", "{0}\n\n{1}\n\nThis cannot be undone. Continue?"),
+			Action->GetTitle(), Action->GetDescription());
+
+		if (FMessageDialog::Open(EAppMsgType::YesNo, Message) != EAppReturnType::Yes)
+		{
+			return FReply::Handled();
+		}
+	}
+
+	FScopedSlowTask SlowTask(0.0f, Action->GetTitle());
+	SlowTask.MakeDialog();
+
+	CleanupResults.Add(Action->GetId(), Action->Execute());
+	return FReply::Handled();
 }
 
 // ---------------------------------------------------------------------------

@@ -32,6 +32,7 @@ public class OptimizationToolsetEditor : ModuleRules
 			"ApplicationCore",
 			"RenderCore",
 			"AssetRegistry",
+			"AssetTools",
 		});
 	}
 }
