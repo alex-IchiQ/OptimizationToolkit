@@ -7,7 +7,11 @@
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine/Texture2D.h"
+#include "MaterialShared.h"
 #include "Materials/MaterialInterface.h"
+#include "Components/MeshComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/LightComponent.h"
 #include "Engine/Light.h"
@@ -53,6 +57,48 @@ namespace
 			return Hash;
 		}
 	};
+
+	/** Static-mesh asset plus its effective component material assignments. */
+	struct FMaterialSlotKey
+	{
+		const UStaticMesh* Mesh = nullptr;
+		TArray<const UMaterialInterface*> Materials;
+
+		bool operator==(const FMaterialSlotKey& Other) const
+		{
+			return Mesh == Other.Mesh && Materials == Other.Materials;
+		}
+
+		friend uint32 GetTypeHash(const FMaterialSlotKey& Key)
+		{
+			uint32 Hash = GetTypeHash(Key.Mesh);
+			for (const UMaterialInterface* Material : Key.Materials)
+			{
+				Hash = HashCombine(Hash, GetTypeHash(Material));
+			}
+			return Hash;
+		}
+	};
+
+	bool IsSpecialPurposeTextureGroup(TextureGroup Group)
+	{
+		switch (Group)
+		{
+		case TEXTUREGROUP_UI:
+		case TEXTUREGROUP_RenderTarget:
+		case TEXTUREGROUP_Lightmap:
+		case TEXTUREGROUP_Shadowmap:
+		case TEXTUREGROUP_ColorLookupTable:
+		case TEXTUREGROUP_Terrain_Heightmap:
+		case TEXTUREGROUP_Terrain_Weightmap:
+		case TEXTUREGROUP_Bokeh:
+		case TEXTUREGROUP_IESLightProfile:
+		case TEXTUREGROUP_Pixels2D:
+			return true;
+		default:
+			return false;
+		}
+	}
 }
 
 void FStaticMeshPass::Run(UWorld* World, const FAnalyzeThresholds& T, FScanResult& Out) const
@@ -183,6 +229,234 @@ void FLightingPass::Run(UWorld* World, const FAnalyzeThresholds& T, FScanResult&
 		F.TargetActor = Light;
 		F.FixId = TEXT("Fix_ReviewLightMobility");
 		Out.Findings.Add(MoveTemp(F));
+	}
+}
+
+void FTexturePass::Run(UWorld* World, const FAnalyzeThresholds& T, FScanResult& Out) const
+{
+	TMap<UTexture2D*, TWeakObjectPtr<AActor>> TextureOwners;
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Actor = *It;
+		TInlineComponentArray<UPrimitiveComponent*> PrimitiveComponents(Actor);
+		for (UPrimitiveComponent* Component : PrimitiveComponents)
+		{
+			if (!Component)
+			{
+				continue;
+			}
+
+			TArray<UTexture*> UsedTextures;
+			Component->GetUsedTextures(UsedTextures, EMaterialQualityLevel::High);
+			for (UTexture* UsedTexture : UsedTextures)
+			{
+				UTexture2D* Texture = Cast<UTexture2D>(UsedTexture);
+				if (!Texture || Texture->HasAnyFlags(RF_Transient)
+					|| Texture->GetPathName().StartsWith(TEXT("/Engine/")))
+				{
+					continue;
+				}
+
+				if (!TextureOwners.Contains(Texture))
+				{
+					TextureOwners.Add(Texture, Actor);
+				}
+			}
+		}
+	}
+
+	for (const TPair<UTexture2D*, TWeakObjectPtr<AActor>>& Pair : TextureOwners)
+	{
+		UTexture2D* Texture = Pair.Key;
+		const int32 Width = Texture->GetSizeX();
+		const int32 Height = Texture->GetSizeY();
+		if (Width <= 0 || Height <= 0)
+		{
+			continue;
+		}
+
+		const int32 LongestSide = FMath::Max(Width, Height);
+		const int32 EffectiveLongestSide = Texture->MaxTextureSize > 0
+			? FMath::Min(LongestSide, Texture->MaxTextureSize) : LongestSide;
+		const bool bSpecialPurpose = IsSpecialPurposeTextureGroup(Texture->LODGroup);
+		const bool bPowerOfTwo = FMath::IsPowerOfTwo(Width) && FMath::IsPowerOfTwo(Height);
+		const FText Subject = FText::Format(
+			LOCTEXT("TextureSubject", "{0} ({1} x {2})"),
+			FText::FromString(Texture->GetName()), FText::AsNumber(Width), FText::AsNumber(Height));
+
+		if (EffectiveLongestSide > T.OversizedTextureSize)
+		{
+			const ESeverity Severity = Texture->VirtualTextureStreaming || bSpecialPurpose
+				? ESeverity::Minor : ESeverity::Major;
+			FFinding F(Severity, ECategory::Textures,
+				LOCTEXT("OversizedTextureTitle", "Texture exceeds the configured size limit"), Subject);
+			F.WhyItMatters = FText::Format(
+				LOCTEXT("OversizedTextureWhy", "Its effective longest side is {0}px; large textures increase memory, streaming, and build cost."),
+				FText::AsNumber(EffectiveLongestSide));
+			F.HowToFix = LOCTEXT("OversizedTextureFix", "Verify texel density, then reduce the source resolution or set Max Texture Size.");
+			F.TargetActor = Pair.Value;
+			Out.Findings.Add(MoveTemp(F));
+		}
+
+		if (!bSpecialPurpose && !bPowerOfTwo
+			&& Texture->PowerOfTwoMode == ETexturePowerOfTwoSetting::None)
+		{
+			FFinding F(ESeverity::Minor, ECategory::Textures,
+				LOCTEXT("NonPowerOfTwoTitle", "Texture dimensions are not power-of-two"), Subject);
+			F.WhyItMatters = LOCTEXT("NonPowerOfTwoWhy", "Unpadded dimensions can prevent a complete mip chain and make streaming less efficient.");
+			F.HowToFix = LOCTEXT("NonPowerOfTwoFix", "Resize the source or choose an appropriate Padding and Resizing mode in the texture asset.");
+			F.TargetActor = Pair.Value;
+			Out.Findings.Add(MoveTemp(F));
+		}
+
+		if (!bSpecialPurpose && bPowerOfTwo && LongestSide >= 1024
+			&& Texture->MipGenSettings == TMGS_NoMipmaps && !Texture->VirtualTextureStreaming)
+		{
+			const ESeverity Severity = LongestSide >= 2048 ? ESeverity::Major : ESeverity::Minor;
+			FFinding F(Severity, ECategory::Textures,
+				LOCTEXT("MissingTextureMipsTitle", "Large texture has mipmaps disabled"), Subject);
+			F.WhyItMatters = LOCTEXT("MissingTextureMipsWhy", "Rendering the full-resolution texture at every distance wastes bandwidth and can shimmer.");
+			F.HowToFix = LOCTEXT("MissingTextureMipsFix", "Use FromTextureGroup mip generation unless this asset intentionally requires exact texels.");
+			F.TargetActor = Pair.Value;
+			Out.Findings.Add(MoveTemp(F));
+		}
+	}
+}
+
+void FMaterialPass::Run(UWorld* World, const FAnalyzeThresholds& T, FScanResult& Out) const
+{
+	TMap<FMaterialSlotKey, TWeakObjectPtr<AActor>> SlotLayouts;
+	TMap<UMaterialInterface*, TWeakObjectPtr<AActor>> MaterialOwners;
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Actor = *It;
+		TInlineComponentArray<UMeshComponent*> MeshComponents(Actor);
+		for (UMeshComponent* Component : MeshComponents)
+		{
+			if (!Component)
+			{
+				continue;
+			}
+
+			const int32 MaterialCount = Component->GetNumMaterials();
+			for (int32 MaterialIndex = 0; MaterialIndex < MaterialCount; ++MaterialIndex)
+			{
+				UMaterialInterface* Material = Component->GetMaterial(MaterialIndex);
+				if (Material && !Material->HasAnyFlags(RF_Transient)
+					&& !Material->GetPathName().StartsWith(TEXT("/Engine/"))
+					&& !MaterialOwners.Contains(Material))
+				{
+					MaterialOwners.Add(Material, Actor);
+				}
+			}
+
+			UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component);
+			UStaticMesh* Mesh = StaticMeshComponent ? StaticMeshComponent->GetStaticMesh() : nullptr;
+			if (!Mesh)
+			{
+				continue;
+			}
+
+			FMaterialSlotKey Key;
+			Key.Mesh = Mesh;
+			Key.Materials.Reserve(MaterialCount);
+			for (int32 MaterialIndex = 0; MaterialIndex < MaterialCount; ++MaterialIndex)
+			{
+				Key.Materials.Add(Component->GetMaterial(MaterialIndex));
+			}
+			SlotLayouts.FindOrAdd(MoveTemp(Key), Actor);
+		}
+	}
+
+	for (const TPair<FMaterialSlotKey, TWeakObjectPtr<AActor>>& Pair : SlotLayouts)
+	{
+		const int32 SlotCount = Pair.Key.Materials.Num();
+		const FText Subject = FText::Format(
+			LOCTEXT("MaterialSlotsSubject", "{0} ({1} slots)"),
+			FText::FromString(Pair.Key.Mesh->GetName()), FText::AsNumber(SlotCount));
+
+		if (SlotCount > T.MaterialSlotBudget)
+		{
+			const ESeverity Severity = SlotCount > T.MaterialSlotBudget * 2
+				? ESeverity::Major : ESeverity::Minor;
+			FFinding F(Severity, ECategory::Materials,
+				LOCTEXT("MaterialSlotBudgetTitle", "Mesh has many material slots"), Subject);
+			F.WhyItMatters = LOCTEXT("MaterialSlotBudgetWhy", "Each visible mesh section typically requires another draw submission and material state change.");
+			F.HowToFix = LOCTEXT("MaterialSlotBudgetFix", "Merge compatible materials or consolidate sections in the source mesh where visual requirements allow.");
+			F.TargetActor = Pair.Value;
+			Out.Findings.Add(MoveTemp(F));
+		}
+
+		int32 EmptySlots = 0;
+		int32 DuplicateSlots = 0;
+		TSet<const UMaterialInterface*> SeenMaterials;
+		for (const UMaterialInterface* Material : Pair.Key.Materials)
+		{
+			if (!Material)
+			{
+				++EmptySlots;
+			}
+			else if (SeenMaterials.Contains(Material))
+			{
+				++DuplicateSlots;
+			}
+			else
+			{
+				SeenMaterials.Add(Material);
+			}
+		}
+
+		if (EmptySlots > 0)
+		{
+			FFinding F(ESeverity::Minor, ECategory::Materials,
+				LOCTEXT("EmptyMaterialSlotsTitle", "Mesh contains empty material slots"), Subject);
+			F.WhyItMatters = FText::Format(
+				LOCTEXT("EmptyMaterialSlotsWhy", "{0} slots have no material assigned, which often indicates obsolete or broken section setup."),
+				FText::AsNumber(EmptySlots));
+			F.HowToFix = LOCTEXT("EmptyMaterialSlotsFix", "Inspect the affected sections and remove unused slots in the source mesh or assign the intended material.");
+			F.TargetActor = Pair.Value;
+			Out.Findings.Add(MoveTemp(F));
+		}
+
+		if (DuplicateSlots > 0)
+		{
+			FFinding F(ESeverity::Minor, ECategory::Materials,
+				LOCTEXT("DuplicateMaterialSlotsTitle", "Multiple mesh slots use the same material"), Subject);
+			F.WhyItMatters = FText::Format(
+				LOCTEXT("DuplicateMaterialSlotsWhy", "{0} repeated assignments may represent sections that can be merged to reduce draw submissions."),
+				FText::AsNumber(DuplicateSlots));
+			F.HowToFix = LOCTEXT("DuplicateMaterialSlotsFix", "Review section boundaries and merge slots in the source mesh when they do not need separate IDs.");
+			F.TargetActor = Pair.Value;
+			Out.Findings.Add(MoveTemp(F));
+		}
+	}
+
+	for (const TPair<UMaterialInterface*, TWeakObjectPtr<AActor>>& Pair : MaterialOwners)
+	{
+		UMaterialInterface* Material = Pair.Key;
+		const FText Subject = FText::FromString(Material->GetName());
+
+		if (IsTranslucentBlendMode(*Material))
+		{
+			FFinding F(ESeverity::Minor, ECategory::Materials,
+				LOCTEXT("TranslucentMaterialTitle", "Translucent material requires review"), Subject);
+			F.WhyItMatters = LOCTEXT("TranslucentMaterialWhy", "Translucency can create heavy overdraw and sorting cost, especially on large screen-space surfaces.");
+			F.HowToFix = LOCTEXT("TranslucentMaterialFix", "Keep translucency only where required; prefer Masked or Opaque when the visual result permits.");
+			F.TargetActor = Pair.Value;
+			Out.Findings.Add(MoveTemp(F));
+		}
+
+		if (Material->IsTwoSided())
+		{
+			FFinding F(ESeverity::Minor, ECategory::Materials,
+				LOCTEXT("TwoSidedMaterialTitle", "Two-sided material requires review"), Subject);
+			F.WhyItMatters = LOCTEXT("TwoSidedMaterialWhy", "Rendering both face orientations increases rasterized geometry and can amplify overdraw.");
+			F.HowToFix = LOCTEXT("TwoSidedMaterialFix", "Disable Two Sided unless the asset genuinely needs visible backfaces, such as foliage or thin cloth.");
+			F.TargetActor = Pair.Value;
+			Out.Findings.Add(MoveTemp(F));
+		}
 	}
 }
 

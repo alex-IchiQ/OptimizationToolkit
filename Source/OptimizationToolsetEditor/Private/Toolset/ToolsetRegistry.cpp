@@ -17,6 +17,8 @@ void FToolsetRegistry::RegisterDefaults()
 	Fixes.Reset();
 
 	AddPass(MakeUnique<FStaticMeshPass>());
+	AddPass(MakeUnique<FTexturePass>());
+	AddPass(MakeUnique<FMaterialPass>());
 	AddPass(MakeUnique<FLightingPass>());
 	AddPass(MakeUnique<FInstancingCandidatePass>());
 

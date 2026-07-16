@@ -36,9 +36,11 @@ Working:
 - **Analyze** *(functional)* — runs registered passes; findings with severity
   (Critical/Major/Minor), category filter, search, and a **Focus** button that
   frames the offending actor. Passes: `FStaticMeshPass` (excessive triangles,
-  Nanite candidate, missing LODs, per-poly collision) and `FLightingPass`
-  (too many movable lights), plus `FInstancingCandidatePass` (conservative
-  groups of compatible repeated static-mesh actors).
+  Nanite candidate, missing LODs, per-poly collision), `FTexturePass`
+  (oversized, non-power-of-two, and missing mipmaps), `FMaterialPass` (slot
+  count, empty/duplicate assignments, translucency, and two-sided review),
+  `FLightingPass` (too many movable lights), plus `FInstancingCandidatePass`
+  (conservative groups of compatible repeated static-mesh actors).
 - **Optimize** *(functional)* — lists findings that have a supported fix, with
   per-row **Apply** and an **Apply all** button; every fix is transactional
   (Undo/Redo) and the level auto-re-scans afterward. Fixes: `FEnableNaniteFix`,
@@ -57,8 +59,8 @@ Ordered by suggested priority:
 1. **Safe ISM/HISM conversion fix** for groups reported by
    `FInstancingCandidatePass`. Preserve transforms and require a final
    compatibility check before replacing actors.
-2. **More analyze passes** — textures (oversized / non-pow2 / mip settings),
-   materials (slot count, instructions), Blueprints.
+2. **More analyze passes** — shader instruction counts (version/platform-aware)
+   and Blueprints.
 3. **Cleanup panel** — project size breakdown, fix redirectors, delete unused,
    project-settings audit.
 4. **Reports panel** — CSV/JSON export of `FScanResult`, before/after snapshots.

@@ -13,6 +13,22 @@ public:
 	virtual void Run(UWorld* World, const FAnalyzeThresholds& Thresholds, FScanResult& Out) const override;
 };
 
+/** Texture hygiene for assets actually referenced by primitive components in the level. */
+class FTexturePass : public IAnalyzePass
+{
+public:
+	virtual FName GetId() const override { return TEXT("Pass_Textures"); }
+	virtual void Run(UWorld* World, const FAnalyzeThresholds& Thresholds, FScanResult& Out) const override;
+};
+
+/** Material and section-layout hygiene for mesh components used in the level. */
+class FMaterialPass : public IAnalyzePass
+{
+public:
+	virtual FName GetId() const override { return TEXT("Pass_Materials"); }
+	virtual void Run(UWorld* World, const FAnalyzeThresholds& Thresholds, FScanResult& Out) const override;
+};
+
 /** Lighting hygiene: too many movable (dynamic) lights. */
 class FLightingPass : public IAnalyzePass
 {
