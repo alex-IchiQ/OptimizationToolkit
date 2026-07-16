@@ -36,7 +36,7 @@ Private/Toolset/
     LevelAnalyzer.cpp
     AnalyzePasses.h/.cpp   FStaticMeshPass, FLightingPass
   Optimization/
-    OptimizationFixes.h/.cpp  FEnableNaniteFix, FGenerateLODsFix
+    OptimizationFixes.h/.cpp  Nanite, LOD, collision, and light-mobility fixes
 Resources/
   *.svg (white, one per nav section), vera.png (mascot)
 ```

@@ -41,7 +41,7 @@ Working:
 - **Optimize** *(functional)* — lists findings that have a supported fix, with
   per-row **Apply** and an **Apply all** button; every fix is transactional
   (Undo/Redo) and the level auto-re-scans afterward. Fixes: `FEnableNaniteFix`,
-  `FGenerateLODsFix`.
+  `FGenerateLODsFix`, `FSimpleCollisionFix`, `FReviewLightMobilityFix`.
 - **Profile** *(functional)* — one-click `stat` command stacks (fps/unit/gpu/
   scenerendering/rhi/initviews/streaming/profilegpu/clear).
 
@@ -53,14 +53,7 @@ Placeholder panels (structured, list planned actions, not yet implemented):
 
 Ordered by suggested priority:
 
-1. **More fixes** (each is one `IOptimizationFix` subclass + one line in
-   `RegisterDefaults()` — see ARCHITECTURE.md):
-   - `Fix_SimpleCollision` — swap per-poly collision for a simple primitive.
-   - `Fix_ReviewLightMobility` — needs a rethink: the current lighting finding is
-     *aggregate* ("31 movable lights") and targets one actor; a good fix needs
-     **per-light findings** instead. Consider changing `FLightingPass` to emit one
-     finding per movable light before writing this fix.
-   - ISM/HISM instancing for duplicate static meshes (new pass + fix).
+1. **ISM/HISM instancing** for duplicate static meshes (new pass + fix).
 2. **More analyze passes** — textures (oversized / non-pow2 / mip settings),
    materials (slot count, instructions), Blueprints.
 3. **Cleanup panel** — project size breakdown, fix redirectors, delete unused,
@@ -76,8 +69,8 @@ Ordered by suggested priority:
 2. Build the editor target (or let the editor compile on launch / Live Coding).
 3. Open **Optimization Toolset** from the toolbar or Window menu.
 4. Smoke test: **Scan Level** → check Analyze findings → **Optimize** → **Apply**
-   on a mesh → confirm the change (e.g. Nanite on, or LOD1–3 present) and that
-   **Ctrl+Z** reverts it.
+   on a finding → confirm the change (Nanite, LOD1–3, simple collision, or light
+   mobility) and that **Ctrl+Z** reverts it.
 
 ## Gotchas already hit (don't rediscover these)
 
