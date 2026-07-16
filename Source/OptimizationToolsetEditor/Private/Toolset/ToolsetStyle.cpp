@@ -89,6 +89,16 @@ TSharedRef<FSlateStyleSet> FToolsetStyle::Create()
 	Style->Set("Toolset.Pill",        new FSlateRoundedBoxBrush(FLinearColor(1, 1, 1, 0.06f), 10.0f));
 	Style->Set("Toolset.Pill.Accent", new FSlateRoundedBoxBrush(AccentDim, 10.0f));
 
+	// Tint-ready fills. BorderBackgroundColor *multiplies* a brush's own tint, so
+	// a brush carrying any colour of its own can never be tinted to a different
+	// one: a dark surface times a bright colour is just a dark colour. These are
+	// pure white, so whatever colour a widget tints them with lands as authored.
+	// Use these for anything whose colour is decided at runtime (severity
+	// stripes, category swatches, the project size bar).
+	Style->Set("Toolset.Fill",         new FSlateColorBrush(FLinearColor::White));
+	Style->Set("Toolset.Fill.Rounded", new FSlateRoundedBoxBrush(FLinearColor::White, 2.0f));
+	Style->Set("Toolset.Fill.Pill",    new FSlateRoundedBoxBrush(FLinearColor::White, 10.0f));
+
 	// Nav item states.
 	Style->Set("Toolset.Nav.Selected", new FSlateRoundedBoxBrush(FLinearColor(Accent.R, Accent.G, Accent.B, 0.16f), 6.0f));
 	Style->Set("Toolset.Nav.Hover",    new FSlateRoundedBoxBrush(FLinearColor(1, 1, 1, 0.05f), 9.0f));

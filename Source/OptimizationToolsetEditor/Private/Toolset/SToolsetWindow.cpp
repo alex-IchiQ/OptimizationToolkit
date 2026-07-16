@@ -394,7 +394,7 @@ TSharedRef<SWidget> SToolsetWindow::MakeSeverityStatCard(ESeverity Severity)
 				[
 					SNew(SBox).WidthOverride(9).HeightOverride(9)
 					[
-						SNew(SBorder).BorderImage(Brush("Toolset.Pill")).BorderBackgroundColor(FSlateColor(Color))[ SNullWidget::NullWidget ]
+						SNew(SBorder).BorderImage(Brush("Toolset.Fill.Rounded")).BorderBackgroundColor(FSlateColor(Color))[ SNullWidget::NullWidget ]
 					]
 				]
 				+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
@@ -490,7 +490,7 @@ TSharedRef<ITableRow> SToolsetWindow::OnGenerateFindingRow(TSharedPtr<FFinding> 
 	// Severity pill.
 	Pills->AddSlot().AutoWidth().Padding(FMargin(0, 0, 6, 0))
 	[
-		SNew(SBorder).BorderImage(Brush("Toolset.Pill")).BorderBackgroundColor(FSlateColor(FLinearColor(SevColor.R, SevColor.G, SevColor.B, 0.18f)))
+		SNew(SBorder).BorderImage(Brush("Toolset.Fill.Pill")).BorderBackgroundColor(FSlateColor(FLinearColor(SevColor.R, SevColor.G, SevColor.B, 0.18f)))
 		.Padding(FMargin(8, 2))
 		[
 			SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle")
@@ -520,7 +520,7 @@ TSharedRef<ITableRow> SToolsetWindow::OnGenerateFindingRow(TSharedPtr<FFinding> 
 				[
 					SNew(SBox).WidthOverride(4)
 					[
-						SNew(SBorder).BorderImage(Brush("Toolset.Card.Inner")).BorderBackgroundColor(FSlateColor(SevColor))[ SNullWidget::NullWidget ]
+						SNew(SBorder).BorderImage(Brush("Toolset.Fill")).BorderBackgroundColor(FSlateColor(SevColor))[ SNullWidget::NullWidget ]
 					]
 				]
 
@@ -656,7 +656,7 @@ TSharedRef<ITableRow> SToolsetWindow::OnGenerateFixRow(TSharedPtr<FFinding> Item
 				[
 					SNew(SBox).WidthOverride(4)
 					[
-						SNew(SBorder).BorderImage(Brush("Toolset.Card.Inner")).BorderBackgroundColor(FSlateColor(SevColor))[ SNullWidget::NullWidget ]
+						SNew(SBorder).BorderImage(Brush("Toolset.Fill")).BorderBackgroundColor(FSlateColor(SevColor))[ SNullWidget::NullWidget ]
 					]
 				]
 
@@ -847,7 +847,7 @@ void SToolsetWindow::RebuildSizeBreakdown()
 		.FillWidth(FMath::Max(Fraction, KINDA_SMALL_NUMBER))
 		[
 			SNew(SBorder)
-			.BorderImage(Brush("Toolset.Surface.Panel"))
+			.BorderImage(Brush("Toolset.Fill"))
 			.BorderBackgroundColor(FSlateColor(Color))
 			[
 				SNullWidget::NullWidget
@@ -863,7 +863,7 @@ void SToolsetWindow::RebuildSizeBreakdown()
 			[
 				SNew(SBox).WidthOverride(9).HeightOverride(9)
 				[
-					SNew(SBorder).BorderImage(Brush("Toolset.Pill")).BorderBackgroundColor(FSlateColor(Color))
+					SNew(SBorder).BorderImage(Brush("Toolset.Fill.Rounded")).BorderBackgroundColor(FSlateColor(Color))
 					[
 						SNullWidget::NullWidget
 					]
@@ -928,7 +928,7 @@ TSharedRef<SWidget> SToolsetWindow::MakeCleanupActionCard(const ICleanupAction& 
 						+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(8, 0, 0, 0))
 						[
 							SNew(SBorder)
-							.BorderImage(Brush("Toolset.Pill"))
+							.BorderImage(Brush("Toolset.Fill.Pill"))
 							.BorderBackgroundColor(FSlateColor(FLinearColor(
 								FToolsetStyle::SeverityMajor.R, FToolsetStyle::SeverityMajor.G, FToolsetStyle::SeverityMajor.B, 0.18f)))
 							.Padding(FMargin(8, 2))
@@ -1079,7 +1079,7 @@ TSharedRef<SWidget> SToolsetWindow::BuildPlaceholderPanel(const FText& Title, co
 			[
 				SNew(SBox).WidthOverride(6).HeightOverride(6)
 				[
-					SNew(SBorder).BorderImage(Brush("Toolset.Pill")).BorderBackgroundColor(FSlateColor(FToolsetStyle::Accent))[ SNullWidget::NullWidget ]
+					SNew(SBorder).BorderImage(Brush("Toolset.Fill.Rounded")).BorderBackgroundColor(FSlateColor(FToolsetStyle::Accent))[ SNullWidget::NullWidget ]
 				]
 			]
 			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
