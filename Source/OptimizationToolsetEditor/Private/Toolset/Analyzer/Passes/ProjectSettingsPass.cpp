@@ -29,8 +29,10 @@ void FProjectSettingsPass::Run(const FLevelScanContext& Context, const FAnalyzeT
 	}
 
 	// --- Every permutation of every shader gets compiled and shipped, most of
-	// them for features the project never uses.
-	if (Settings->bSupportAllShaderPermutations)
+	// them for features the project never uses. This one lives on the separate
+	// "Rendering Overrides" settings object, not on URendererSettings.
+	const URendererOverrideSettings* Overrides = GetDefault<URendererOverrideSettings>();
+	if (Overrides && Overrides->bSupportAllShaderPermutations)
 	{
 		FFinding F(TEXT("Project.AllShaderPermutations"), ESeverity::Major, ECategory::Project,
 			LOCTEXT("PermutationsTitle", "Support All Shader Permutations is enabled"), Subject);

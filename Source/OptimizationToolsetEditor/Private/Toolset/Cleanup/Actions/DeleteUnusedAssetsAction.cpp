@@ -41,11 +41,14 @@ namespace
 		};
 
 		AddPath(MapsSettings->EditorStartupMap);
-		AddPath(MapsSettings->GameDefaultMap);
-		AddPath(MapsSettings->ServerDefaultMap);
 		AddPath(MapsSettings->TransitionMap);
 		AddPath(MapsSettings->GameInstanceClass);
-		AddPath(MapsSettings->GlobalDefaultGameMode);
+
+		// The default maps and game mode are private; these static getters are
+		// the supported way to read them, and they resolve the config fallbacks.
+		AddPath(FSoftObjectPath(UGameMapsSettings::GetGameDefaultMap(EDefaultMapRequestType::Default)));
+		AddPath(FSoftObjectPath(UGameMapsSettings::GetGameDefaultMap(EDefaultMapRequestType::Server)));
+		AddPath(FSoftObjectPath(UGameMapsSettings::GetGlobalDefaultGameMode()));
 
 		return Packages;
 	}
