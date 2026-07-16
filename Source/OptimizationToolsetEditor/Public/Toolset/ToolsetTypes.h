@@ -69,6 +69,15 @@ struct FFinding
 	/** Actor to focus in the viewport when the user clicks the row (optional). */
 	TWeakObjectPtr<AActor> TargetActor;
 
+	/**
+	 * Every actor this finding covers, when it describes a group rather than a
+	 * single offender (instancing candidates, for one). TargetActor is just the
+	 * one we frame; a fix that rewrites the group needs all of them, and
+	 * re-deriving the grouping inside the fix would duplicate the pass's rules.
+	 * Empty for findings about a single actor or an asset.
+	 */
+	TArray<TWeakObjectPtr<AActor>> RelatedActors;
+
 	/** Stable id for the auto-fix that resolves this finding, or NAME_None. */
 	FName FixId = NAME_None;
 

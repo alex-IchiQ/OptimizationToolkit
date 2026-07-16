@@ -12,6 +12,7 @@
 #include "Toolset/Optimization/Fixes/GenerateLODsFix.h"
 #include "Toolset/Optimization/Fixes/SimpleCollisionFix.h"
 #include "Toolset/Optimization/Fixes/ReviewLightMobilityFix.h"
+#include "Toolset/Optimization/Fixes/ConvertToInstancesFix.h"
 
 #include "Toolset/Cleanup/Actions/SaveDirtyPackagesAction.h"
 #include "Toolset/Cleanup/Actions/FixUpRedirectorsAction.h"
@@ -39,6 +40,7 @@ void FToolsetRegistry::RegisterDefaults()
 	AddFix(MakeUnique<FGenerateLODsFix>());
 	AddFix(MakeUnique<FSimpleCollisionFix>());
 	AddFix(MakeUnique<FReviewLightMobilityFix>());
+	AddFix(MakeUnique<FConvertToInstancesFix>());
 
 	AddAction(MakeUnique<FSaveDirtyPackagesAction>());
 	AddAction(MakeUnique<FFixUpRedirectorsAction>());

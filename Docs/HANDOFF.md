@@ -44,7 +44,9 @@ Working:
 - **Optimize** *(functional)* — lists findings that have a supported fix, with
   per-row **Apply** and an **Apply all** button; every fix is transactional
   (Undo/Redo) and the level auto-re-scans afterward. Fixes: `FEnableNaniteFix`,
-  `FGenerateLODsFix`, `FSimpleCollisionFix`, `FReviewLightMobilityFix`.
+  `FGenerateLODsFix`, `FSimpleCollisionFix`, `FReviewLightMobilityFix`,
+  `FConvertToInstancesFix` (replaces a vetted group of repeated static-mesh
+  actors with one HISM actor; reads the group from `FFinding::RelatedActors`).
 - **Profile** *(functional)* — one-click `stat` command stacks (fps/unit/gpu/
   scenerendering/rhi/initviews/streaming/profilegpu/clear).
 - **Settings** *(functional)* — project-wide analyze thresholds under
@@ -64,9 +66,11 @@ Placeholder panels (structured, list planned actions, not yet implemented):
 
 Ordered by suggested priority:
 
-1. **Safe ISM/HISM conversion fix** for groups reported by
-   `FInstancingCandidatePass`. Preserve transforms and require a final
-   compatibility check before replacing actors.
+1. **Preview before apply** — currently Apply is a leap of faith. Worth a shared
+   list-with-checkboxes widget so a user can untick individual actors/assets
+   before ISM conversion or a delete. Also: `Fix_ConvertToInstances` is
+   structural and currently runs under "Apply all" like any other fix; consider
+   flagging structural fixes so bulk apply doesn't restructure a level silently.
 2. **More analyze passes** — shader instruction counts (version/platform-aware)
    and Blueprints.
 3. **Delete unused assets** — the remaining Cleanup item, and the most dangerous

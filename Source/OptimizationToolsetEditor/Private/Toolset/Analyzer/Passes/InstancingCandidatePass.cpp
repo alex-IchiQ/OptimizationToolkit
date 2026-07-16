@@ -112,6 +112,16 @@ void FInstancingCandidatePass::Run(const FLevelScanContext& Context, const FAnal
 			FText::AsNumber(EstimatedSavedDrawCalls));
 		F.HowToFix = LOCTEXT("InstancingCandidateFix", "Review the group, then replace it with an ISM or HISM component if no actor needs unique behavior.");
 		F.TargetActor = Actors[0];
+
+		// Hand the whole group to the fix: it rewrites all of them, and it must
+		// not have to re-derive the compatibility rules enforced above.
+		F.RelatedActors.Reserve(Actors.Num());
+		for (AStaticMeshActor* GroupActor : Actors)
+		{
+			F.RelatedActors.Add(GroupActor);
+		}
+		F.FixId = TEXT("Fix_ConvertToInstances");
+
 		Out.Findings.Add(MoveTemp(F));
 	}
 }
