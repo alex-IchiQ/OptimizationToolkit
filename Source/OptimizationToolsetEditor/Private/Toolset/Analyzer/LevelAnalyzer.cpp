@@ -1,11 +1,14 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "Toolset/Analyzer/LevelAnalyzer.h"
+#include "Toolset/OptimizationToolsetSettings.h"
 #include "Toolset/ToolsetRegistry.h"
 
 #include "Editor.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
+#include "Engine/Light.h"
+#include "Engine/StaticMeshActor.h"
 
 FScanResult FLevelAnalyzer::AnalyzeCurrentLevel()
 {
@@ -18,17 +21,42 @@ FScanResult FLevelAnalyzer::AnalyzeCurrentLevel()
 	}
 
 	const double StartTime = FPlatformTime::Seconds();
-	const FAnalyzeThresholds Thresholds;
+	FAnalyzeThresholds Thresholds;
+	if (const UOptimizationToolsetSettings* Settings = GetDefault<UOptimizationToolsetSettings>())
+	{
+		Thresholds.NaniteCandidateTriangles = FMath::Max(1, Settings->NaniteCandidateTriangles);
+		Thresholds.ExcessiveTriangles = FMath::Max(
+			Thresholds.NaniteCandidateTriangles, Settings->ExcessiveTriangles);
+		Thresholds.OversizedTextureSize = FMath::Max(1, Settings->OversizedTextureSize);
+		Thresholds.MaterialSlotBudget = FMath::Max(1, Settings->MaterialSlotBudget);
+		Thresholds.MovableLightBudget = FMath::Max(0, Settings->MovableLightBudget);
+		Thresholds.InstancingCandidateCount = FMath::Max(2, Settings->InstancingCandidateCount);
+	}
+	// Walk the world once and bucket the types passes ask for, instead of every
+	// pass running its own TActorIterator over the whole level.
+	FLevelScanContext Context;
+	Context.World = World;
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
-		++Result.ActorsScanned;
+		AActor* Actor = *It;
+		Context.Actors.Add(Actor);
+
+		if (AStaticMeshActor* StaticMeshActor = Cast<AStaticMeshActor>(Actor))
+		{
+			Context.StaticMeshActors.Add(StaticMeshActor);
+		}
+		else if (ALight* Light = Cast<ALight>(Actor))
+		{
+			Context.Lights.Add(Light);
+		}
 	}
+	Result.ActorsScanned = Context.Actors.Num();
 
 	for (const TUniquePtr<IAnalyzePass>& Pass : FToolsetRegistry::Get().GetPasses())
 	{
 		if (Pass)
 		{
-			Pass->Run(World, Thresholds, Result);
+			Pass->Run(Context, Thresholds, Result);
 		}
 	}
 

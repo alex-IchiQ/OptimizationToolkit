@@ -12,6 +12,7 @@ public class OptimizationToolsetEditor : ModuleRules
 		{
 			"Core",
 			"CoreUObject",
+			"DeveloperSettings",
 			"Engine",
 			"InputCore",
 			"Slate",

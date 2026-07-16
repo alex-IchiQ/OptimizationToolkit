@@ -44,6 +44,13 @@ enum class ECategory : uint8
  */
 struct FFinding
 {
+	/**
+	 * Stable, non-localized id of the *kind* of problem, e.g. "Mesh.MissingLODs".
+	 * Title is display text and localizable, so it can't identify a type; this can.
+	 * Used to group repeats when scoring, and later for report exports.
+	 */
+	FName TypeId = NAME_None;
+
 	ESeverity Severity = ESeverity::Minor;
 	ECategory Category = ECategory::Meshes;
 
@@ -67,8 +74,9 @@ struct FFinding
 
 	FFinding() = default;
 
-	FFinding(ESeverity InSeverity, ECategory InCategory, FText InTitle, FText InSubject)
-		: Severity(InSeverity)
+	FFinding(FName InTypeId, ESeverity InSeverity, ECategory InCategory, FText InTitle, FText InSubject)
+		: TypeId(InTypeId)
+		, Severity(InSeverity)
 		, Category(InCategory)
 		, Title(MoveTemp(InTitle))
 		, Subject(MoveTemp(InSubject))
@@ -108,13 +116,59 @@ struct FScanResult
 		return Count;
 	}
 
-	/** 0-100 health score: starts at 100, weighted penalty per finding. */
+	/** What one finding of this severity subtracts from the score. */
+	static int32 SeverityPenalty(ESeverity Severity)
+	{
+		switch (Severity)
+		{
+		case ESeverity::Critical: return 12;
+		case ESeverity::Major:    return 5;
+		case ESeverity::Minor:    return 1;
+		default:                  return 0;
+		}
+	}
+
+	/** The most a single finding *type* may subtract, however often it repeats. */
+	static int32 SeverityPenaltyCap(ESeverity Severity)
+	{
+		switch (Severity)
+		{
+		case ESeverity::Critical: return 25;
+		case ESeverity::Major:    return 15;
+		case ESeverity::Minor:    return 6;
+		default:                  return 0;
+		}
+	}
+
+	/**
+	 * 0-100 health score: starts at 100, minus a penalty per finding type.
+	 *
+	 * Penalties are grouped by TypeId and capped per type, because a level with
+	 * 200 movable lights has one problem repeated 200 times, not 200 problems.
+	 * Without the cap any real level pins to 0 and the number stops meaning
+	 * anything. The cap scales with the worst severity seen for that type.
+	 */
 	int32 HealthScore() const
 	{
-		const int32 Penalty =
-			CountBySeverity(ESeverity::Critical) * 12 +
-			CountBySeverity(ESeverity::Major) * 5 +
-			CountBySeverity(ESeverity::Minor) * 1;
-		return FMath::Clamp(100 - Penalty, 0, 100);
+		struct FTypeTally
+		{
+			int32 Penalty = 0;
+			int32 Cap = 0;
+		};
+
+		TMap<FName, FTypeTally> ByType;
+		for (const FFinding& F : Findings)
+		{
+			FTypeTally& Tally = ByType.FindOrAdd(F.TypeId);
+			Tally.Penalty += SeverityPenalty(F.Severity);
+			Tally.Cap = FMath::Max(Tally.Cap, SeverityPenaltyCap(F.Severity));
+		}
+
+		int32 Total = 0;
+		for (const TPair<FName, FTypeTally>& Pair : ByType)
+		{
+			Total += FMath::Min(Pair.Value.Penalty, Pair.Value.Cap);
+		}
+		return FMath::Clamp(100 - Total, 0, 100);
 	}
 };

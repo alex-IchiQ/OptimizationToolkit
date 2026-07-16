@@ -4,8 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Toolset/ToolsetTypes.h"
-
-class UWorld;
+#include "Toolset/Analyzer/LevelScanContext.h"
 
 /**
  * One analysis pass: a self-contained, read-only check over the level.
@@ -23,6 +22,6 @@ public:
 	/** Stable id, mostly for logging / de-dupe. */
 	virtual FName GetId() const = 0;
 
-	/** Inspect the world and append findings. Must not modify anything. */
-	virtual void Run(UWorld* World, const FAnalyzeThresholds& Thresholds, FScanResult& Out) const = 0;
+	/** Inspect the pre-gathered level and append findings. Must not modify anything. */
+	virtual void Run(const FLevelScanContext& Context, const FAnalyzeThresholds& Thresholds, FScanResult& Out) const = 0;
 };

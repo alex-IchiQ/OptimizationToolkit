@@ -47,6 +47,8 @@ Working:
   `FGenerateLODsFix`, `FSimpleCollisionFix`, `FReviewLightMobilityFix`.
 - **Profile** *(functional)* — one-click `stat` command stacks (fps/unit/gpu/
   scenerendering/rhi/initviews/streaming/profilegpu/clear).
+- **Settings** *(functional)* — project-wide analyze thresholds under
+  **Project Settings → Plugins → Optimization Toolset**.
 
 Placeholder panels (structured, list planned actions, not yet implemented):
 - **Cleanup** — project size, fix redirectors, save all, delete unused, settings audit.
@@ -64,16 +66,15 @@ Ordered by suggested priority:
 3. **Cleanup panel** — project size breakdown, fix redirectors, delete unused,
    project-settings audit.
 4. **Reports panel** — CSV/JSON export of `FScanResult`, before/after snapshots.
-5. **Settings** — expose `FAnalyzeThresholds` via a settings UI (likely a
-   `UDeveloperSettings`; if those enums become UPROPERTYs, reintroduce `UENUM`
-   and qualify them, e.g. `EOptimizationSeverity` — see ARCHITECTURE.md).
 
 ## Build / run
 
 1. Plugin lives at `<Project>/Plugins/OptimizationToolset`.
 2. Build the editor target (or let the editor compile on launch / Live Coding).
 3. Open **Optimization Toolset** from the toolbar or Window menu.
-4. Smoke test: **Scan Level** → check Analyze findings → **Optimize** → **Apply**
+4. Optional: adjust thresholds in **Project Settings → Plugins → Optimization
+   Toolset**.
+5. Smoke test: **Scan Level** → check Analyze findings → **Optimize** → **Apply**
    on a finding → confirm the change (Nanite, LOD1–3, simple collision, or light
    mobility) and that **Ctrl+Z** reverts it.
 

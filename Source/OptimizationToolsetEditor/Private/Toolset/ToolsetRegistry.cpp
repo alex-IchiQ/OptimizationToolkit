@@ -1,8 +1,17 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "Toolset/ToolsetRegistry.h"
-#include "Toolset/Analyzer/AnalyzePasses.h"
-#include "Toolset/Optimization/OptimizationFixes.h"
+
+#include "Toolset/Analyzer/Passes/StaticMeshPass.h"
+#include "Toolset/Analyzer/Passes/TexturePass.h"
+#include "Toolset/Analyzer/Passes/MaterialPass.h"
+#include "Toolset/Analyzer/Passes/LightingPass.h"
+#include "Toolset/Analyzer/Passes/InstancingCandidatePass.h"
+
+#include "Toolset/Optimization/Fixes/EnableNaniteFix.h"
+#include "Toolset/Optimization/Fixes/GenerateLODsFix.h"
+#include "Toolset/Optimization/Fixes/SimpleCollisionFix.h"
+#include "Toolset/Optimization/Fixes/ReviewLightMobilityFix.h"
 
 FToolsetRegistry& FToolsetRegistry::Get()
 {
