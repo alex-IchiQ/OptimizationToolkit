@@ -1,0 +1,34 @@
+// Copyright Optimization Toolset. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Toolset/Analyzer/IAnalyzePass.h"
+#include "Toolset/Optimization/IOptimizationFix.h"
+
+/**
+ * Central registry of analyze passes and optimization fixes, populated once at
+ * module startup. The window and analyzer iterate it; features never reference
+ * each other. Adding a feature = add its class + one line in RegisterDefaults().
+ */
+class FToolsetRegistry
+{
+public:
+	static FToolsetRegistry& Get();
+
+	/** Clears then registers the built-in passes and fixes. */
+	void RegisterDefaults();
+
+	void AddPass(TUniquePtr<IAnalyzePass> Pass);
+	void AddFix(TUniquePtr<IOptimizationFix> Fix);
+
+	const TArray<TUniquePtr<IAnalyzePass>>& GetPasses() const { return Passes; }
+	const TArray<TUniquePtr<IOptimizationFix>>& GetFixes() const { return Fixes; }
+
+	/** First fix whose GetId() matches, or nullptr. Non-owning. */
+	IOptimizationFix* FindFix(FName FixId) const;
+
+private:
+	TArray<TUniquePtr<IAnalyzePass>> Passes;
+	TArray<TUniquePtr<IOptimizationFix>> Fixes;
+};
