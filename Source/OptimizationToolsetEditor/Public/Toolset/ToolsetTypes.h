@@ -84,6 +84,7 @@ struct FAnalyzeThresholds
 	int32 ExcessiveTriangles = 500000;		// single mesh that is simply too heavy
 	int32 OversizedTextureSize = 4096;		// px on longest side
 	int32 MovableLightBudget = 24;			// dynamic lights per level before we warn
+	int32 InstancingCandidateCount = 10;	// compatible repeated actors worth batching
 };
 
 /** Aggregate result of a full analyze pass. */

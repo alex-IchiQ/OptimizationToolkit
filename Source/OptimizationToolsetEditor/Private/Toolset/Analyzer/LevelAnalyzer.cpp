@@ -4,6 +4,7 @@
 #include "Toolset/ToolsetRegistry.h"
 
 #include "Editor.h"
+#include "EngineUtils.h"
 #include "Engine/World.h"
 
 FScanResult FLevelAnalyzer::AnalyzeCurrentLevel()
@@ -18,6 +19,10 @@ FScanResult FLevelAnalyzer::AnalyzeCurrentLevel()
 
 	const double StartTime = FPlatformTime::Seconds();
 	const FAnalyzeThresholds Thresholds;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		++Result.ActorsScanned;
+	}
 
 	for (const TUniquePtr<IAnalyzePass>& Pass : FToolsetRegistry::Get().GetPasses())
 	{

@@ -34,7 +34,7 @@ Private/Toolset/
   SToolsetWindow.cpp
   Analyzer/
     LevelAnalyzer.cpp
-    AnalyzePasses.h/.cpp   FStaticMeshPass, FLightingPass
+    AnalyzePasses.h/.cpp   Mesh, lighting, and instancing-candidate passes
   Optimization/
     OptimizationFixes.h/.cpp  Nanite, LOD, collision, and light-mobility fixes
 Resources/

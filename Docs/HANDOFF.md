@@ -37,7 +37,8 @@ Working:
   (Critical/Major/Minor), category filter, search, and a **Focus** button that
   frames the offending actor. Passes: `FStaticMeshPass` (excessive triangles,
   Nanite candidate, missing LODs, per-poly collision) and `FLightingPass`
-  (too many movable lights).
+  (too many movable lights), plus `FInstancingCandidatePass` (conservative
+  groups of compatible repeated static-mesh actors).
 - **Optimize** *(functional)* — lists findings that have a supported fix, with
   per-row **Apply** and an **Apply all** button; every fix is transactional
   (Undo/Redo) and the level auto-re-scans afterward. Fixes: `FEnableNaniteFix`,
@@ -53,7 +54,9 @@ Placeholder panels (structured, list planned actions, not yet implemented):
 
 Ordered by suggested priority:
 
-1. **ISM/HISM instancing** for duplicate static meshes (new pass + fix).
+1. **Safe ISM/HISM conversion fix** for groups reported by
+   `FInstancingCandidatePass`. Preserve transforms and require a final
+   compatibility check before replacing actors.
 2. **More analyze passes** — textures (oversized / non-pow2 / mip settings),
    materials (slot count, instructions), Blueprints.
 3. **Cleanup panel** — project size breakdown, fix redirectors, delete unused,

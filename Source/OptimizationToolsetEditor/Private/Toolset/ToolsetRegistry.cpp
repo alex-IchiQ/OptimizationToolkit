@@ -18,6 +18,7 @@ void FToolsetRegistry::RegisterDefaults()
 
 	AddPass(MakeUnique<FStaticMeshPass>());
 	AddPass(MakeUnique<FLightingPass>());
+	AddPass(MakeUnique<FInstancingCandidatePass>());
 
 	AddFix(MakeUnique<FEnableNaniteFix>());
 	AddFix(MakeUnique<FGenerateLODsFix>());
