@@ -10,6 +10,97 @@
 #include "Misc/PackageName.h"
 #include "Modules/ModuleManager.h"
 
+#define LOCTEXT_NAMESPACE "ProjectSizeReport"
+
+namespace
+{
+	/**
+	 * Class-to-category table. Listed explicitly rather than matched by name
+	 * prefix: "Material" would also swallow MaterialParameterCollection, and
+	 * anything unlisted should land in Other rather than be guessed at.
+	 */
+	EAssetCategory CategoryForClass(FName ClassName)
+	{
+		static const TMap<FName, EAssetCategory> Table = {
+			// Textures
+			{ TEXT("Texture2D"),                  EAssetCategory::Textures },
+			{ TEXT("TextureCube"),                EAssetCategory::Textures },
+			{ TEXT("Texture2DArray"),             EAssetCategory::Textures },
+			{ TEXT("TextureCubeArray"),           EAssetCategory::Textures },
+			{ TEXT("VolumeTexture"),              EAssetCategory::Textures },
+			{ TEXT("SparseVolumeTexture"),        EAssetCategory::Textures },
+			{ TEXT("TextureRenderTarget2D"),      EAssetCategory::Textures },
+			{ TEXT("TextureRenderTargetCube"),    EAssetCategory::Textures },
+			{ TEXT("MediaTexture"),               EAssetCategory::Textures },
+
+			// Static meshes
+			{ TEXT("StaticMesh"),                 EAssetCategory::StaticMeshes },
+
+			// Skeletal meshes and their rigging
+			{ TEXT("SkeletalMesh"),               EAssetCategory::SkeletalMeshes },
+			{ TEXT("Skeleton"),                   EAssetCategory::SkeletalMeshes },
+			{ TEXT("PhysicsAsset"),               EAssetCategory::SkeletalMeshes },
+
+			// Materials
+			{ TEXT("Material"),                   EAssetCategory::Materials },
+			{ TEXT("MaterialInstanceConstant"),   EAssetCategory::Materials },
+			{ TEXT("MaterialFunction"),           EAssetCategory::Materials },
+			{ TEXT("MaterialFunctionInstance"),   EAssetCategory::Materials },
+			{ TEXT("MaterialParameterCollection"),EAssetCategory::Materials },
+			{ TEXT("SubsurfaceProfile"),          EAssetCategory::Materials },
+
+			// Animation (AnimBlueprint sits here: it is animation content first)
+			{ TEXT("AnimSequence"),               EAssetCategory::Animations },
+			{ TEXT("AnimMontage"),                EAssetCategory::Animations },
+			{ TEXT("AnimComposite"),              EAssetCategory::Animations },
+			{ TEXT("AnimBlueprint"),              EAssetCategory::Animations },
+			{ TEXT("BlendSpace"),                 EAssetCategory::Animations },
+			{ TEXT("BlendSpace1D"),               EAssetCategory::Animations },
+			{ TEXT("PoseAsset"),                  EAssetCategory::Animations },
+
+			// Audio
+			{ TEXT("SoundWave"),                  EAssetCategory::Audio },
+			{ TEXT("SoundCue"),                   EAssetCategory::Audio },
+			{ TEXT("SoundClass"),                 EAssetCategory::Audio },
+			{ TEXT("SoundMix"),                   EAssetCategory::Audio },
+			{ TEXT("SoundAttenuation"),           EAssetCategory::Audio },
+			{ TEXT("SoundConcurrency"),           EAssetCategory::Audio },
+			{ TEXT("MetaSoundSource"),            EAssetCategory::Audio },
+			{ TEXT("MetaSoundPatch"),             EAssetCategory::Audio },
+
+			// Blueprints and script-side data
+			{ TEXT("Blueprint"),                  EAssetCategory::Blueprints },
+			{ TEXT("WidgetBlueprint"),            EAssetCategory::Blueprints },
+			{ TEXT("BlueprintGeneratedClass"),    EAssetCategory::Blueprints },
+			{ TEXT("UserDefinedStruct"),          EAssetCategory::Blueprints },
+			{ TEXT("UserDefinedEnum"),            EAssetCategory::Blueprints },
+
+			// Levels
+			{ TEXT("World"),                      EAssetCategory::Levels },
+			{ TEXT("LevelInstance"),              EAssetCategory::Levels },
+		};
+
+		const EAssetCategory* Found = Table.Find(ClassName);
+		return Found ? *Found : EAssetCategory::Other;
+	}
+}
+
+FText FProjectSizeReport::LabelForCategory(EAssetCategory Category)
+{
+	switch (Category)
+	{
+	case EAssetCategory::Textures:       return LOCTEXT("CatTextures", "Textures");
+	case EAssetCategory::StaticMeshes:   return LOCTEXT("CatStaticMeshes", "Static meshes");
+	case EAssetCategory::SkeletalMeshes: return LOCTEXT("CatSkeletalMeshes", "Skeletal meshes");
+	case EAssetCategory::Materials:      return LOCTEXT("CatMaterials", "Materials");
+	case EAssetCategory::Animations:     return LOCTEXT("CatAnimations", "Animations");
+	case EAssetCategory::Audio:          return LOCTEXT("CatAudio", "Audio");
+	case EAssetCategory::Blueprints:     return LOCTEXT("CatBlueprints", "Blueprints");
+	case EAssetCategory::Levels:         return LOCTEXT("CatLevels", "Levels");
+	default:                             return LOCTEXT("CatOther", "Other");
+	}
+}
+
 FProjectSizeReport FProjectSizeReport::Compute()
 {
 	FProjectSizeReport Report;
@@ -49,7 +140,7 @@ FProjectSizeReport FProjectSizeReport::Compute()
 		}
 	}
 
-	TMap<FName, FProjectSizeEntry> ByClass;
+	TMap<EAssetCategory, FProjectSizeEntry> ByCategory;
 	for (const TPair<FName, FName>& Pair : PackageToClass)
 	{
 		FString Filename;
@@ -64,8 +155,9 @@ FProjectSizeReport FProjectSizeReport::Compute()
 			continue;
 		}
 
-		FProjectSizeEntry& Entry = ByClass.FindOrAdd(Pair.Value);
-		Entry.ClassName = Pair.Value;
+		const EAssetCategory Category = CategoryForClass(Pair.Value);
+		FProjectSizeEntry& Entry = ByCategory.FindOrAdd(Category);
+		Entry.Category = Category;
 		Entry.TotalBytes += Size;
 		++Entry.PackageCount;
 
@@ -73,7 +165,7 @@ FProjectSizeReport FProjectSizeReport::Compute()
 		++Report.PackageCount;
 	}
 
-	ByClass.GenerateValueArray(Report.Entries);
+	ByCategory.GenerateValueArray(Report.Entries);
 	Report.Entries.Sort([](const FProjectSizeEntry& A, const FProjectSizeEntry& B)
 	{
 		return A.TotalBytes > B.TotalBytes;
@@ -82,3 +174,5 @@ FProjectSizeReport FProjectSizeReport::Compute()
 	Report.ComputeSeconds = FPlatformTime::Seconds() - StartTime;
 	return Report;
 }
+
+#undef LOCTEXT_NAMESPACE

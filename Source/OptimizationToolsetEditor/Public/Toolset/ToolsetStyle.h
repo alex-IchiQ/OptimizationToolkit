@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Toolset/ToolsetTypes.h"
+#include "Toolset/Cleanup/ProjectSizeReport.h"
 #include "Styling/SlateStyle.h"
 
 /**
@@ -41,6 +42,9 @@ public:
 	static FLinearColor ColorForSeverity(ESeverity Severity);
 	static FText LabelForSeverity(ESeverity Severity);
 	static FText LabelForCategory(ECategory Category);
+
+	/** Distinct hue per asset category, for the project size bar and its legend. */
+	static FLinearColor ColorForAssetCategory(EAssetCategory Category);
 
 private:
 	static TSharedRef<class FSlateStyleSet> Create();

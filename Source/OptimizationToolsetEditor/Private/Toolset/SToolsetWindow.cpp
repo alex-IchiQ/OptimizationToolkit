@@ -17,6 +17,7 @@
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SScaleBox.h"
+#include "Widgets/Layout/SWrapBox.h"
 #include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
@@ -831,65 +832,72 @@ void SToolsetWindow::RebuildSizeBreakdown()
 		return;
 	}
 
-	// A long tail of tiny classes is noise; show the heavy hitters and roll the
-	// rest into one row so the totals still add up.
-	const int32 MaxRows = 10;
-	const int32 RowCount = FMath::Min(MaxRows, SizeReport.Entries.Num());
+	// One stacked bar plus a legend: every category is on screen at once, so
+	// nothing about the project's footprint is hidden behind a truncated list.
+	TSharedRef<SHorizontalBox> Bar = SNew(SHorizontalBox);
+	TSharedRef<SWrapBox> Legend = SNew(SWrapBox).UseAllottedSize(true);
 
-	int64 ShownBytes = 0;
-	for (int32 Index = 0; Index < RowCount; ++Index)
+	for (const FProjectSizeEntry& Entry : SizeReport.Entries)
 	{
-		const FProjectSizeEntry& Entry = SizeReport.Entries[Index];
-		ShownBytes += Entry.TotalBytes;
-
+		const FLinearColor Color = FToolsetStyle::ColorForAssetCategory(Entry.Category);
 		const float Fraction = static_cast<float>(
 			static_cast<double>(Entry.TotalBytes) / static_cast<double>(SizeReport.TotalBytes));
 
-		SizeBreakdownBox->AddSlot().AutoHeight().Padding(FMargin(0, 0, 0, 8))
+		Bar->AddSlot()
+		.FillWidth(FMath::Max(Fraction, KINDA_SMALL_NUMBER))
 		[
-			SNew(SVerticalBox)
-
-			+ SVerticalBox::Slot().AutoHeight()
+			SNew(SBorder)
+			.BorderImage(Brush("Toolset.Surface.Panel"))
+			.BorderBackgroundColor(FSlateColor(Color))
 			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
+				SNullWidget::NullWidget
+			]
+		];
+
+		Legend->AddSlot()
+		.Padding(FMargin(0, 0, 18, 6))
+		[
+			SNew(SHorizontalBox)
+
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 7, 0))
+			[
+				SNew(SBox).WidthOverride(9).HeightOverride(9)
 				[
-					SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Body")
-					.Text(FText::Format(LOCTEXT("SizeRowName", "{0}  ({1})"),
-						FText::FromName(Entry.ClassName), FText::AsNumber(Entry.PackageCount)))
-				]
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
-				[
-					SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle")
-					.Text(FText::Format(LOCTEXT("SizeRowValue", "{0}  ·  {1}%"),
-						FText::AsMemory(Entry.TotalBytes),
-						FText::AsNumber(FMath::RoundToInt(Fraction * 100.0f))))
+					SNew(SBorder).BorderImage(Brush("Toolset.Pill")).BorderBackgroundColor(FSlateColor(Color))
+					[
+						SNullWidget::NullWidget
+					]
 				]
 			]
 
-			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4, 0, 0))
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			[
-				SNew(SBox).HeightOverride(4)
-				[
-					SNew(SProgressBar)
-					.Percent(Fraction)
-					.FillColorAndOpacity(FSlateColor(FToolsetStyle::Accent))
-				]
+				SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Body")
+				.Text(FProjectSizeReport::LabelForCategory(Entry.Category))
+			]
+
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(6, 0, 0, 0))
+			[
+				SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle")
+				.Text(FText::Format(LOCTEXT("SizeLegendValue", "{0} · {1}%"),
+					FText::AsMemory(Entry.TotalBytes),
+					FText::AsNumber(FMath::RoundToInt(Fraction * 100.0f))))
 			]
 		];
 	}
 
-	const int64 RemainingBytes = SizeReport.TotalBytes - ShownBytes;
-	const int32 RemainingClasses = SizeReport.Entries.Num() - RowCount;
-	if (RemainingClasses > 0 && RemainingBytes > 0)
-	{
-		SizeBreakdownBox->AddSlot().AutoHeight().Padding(FMargin(0, 2, 0, 0))
+	SizeBreakdownBox->AddSlot().AutoHeight()
+	[
+		SNew(SBox).HeightOverride(14)
 		[
-			SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle")
-			.Text(FText::Format(LOCTEXT("SizeRemainder", "+ {0} more asset types  ·  {1}"),
-				FText::AsNumber(RemainingClasses), FText::AsMemory(RemainingBytes)))
-		];
-	}
+			Bar
+		]
+	];
+
+	SizeBreakdownBox->AddSlot().AutoHeight().Padding(FMargin(0, 14, 0, 0))
+	[
+		Legend
+	];
 }
 
 TSharedRef<SWidget> SToolsetWindow::MakeCleanupActionCard(const ICleanupAction& Action)

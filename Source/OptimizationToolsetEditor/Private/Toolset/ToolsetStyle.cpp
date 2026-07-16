@@ -197,6 +197,26 @@ FText FToolsetStyle::LabelForSeverity(ESeverity Severity)
 	}
 }
 
+FLinearColor FToolsetStyle::ColorForAssetCategory(EAssetCategory Category)
+{
+	// Nine hues that stay apart on the dark island background. Textures take the
+	// mascot teal (they are usually the biggest slice), Animations her shoe
+	// orange, Blueprints her amber eyes; Other stays deliberately grey so the
+	// leftovers never look like a category worth chasing.
+	switch (Category)
+	{
+	case EAssetCategory::Textures:       return FLinearColor(FColor(0x17, 0xB9, 0xA6));
+	case EAssetCategory::StaticMeshes:   return FLinearColor(FColor(0x4A, 0xA3, 0xED));
+	case EAssetCategory::SkeletalMeshes: return FLinearColor(FColor(0xA9, 0x7B, 0xF0));
+	case EAssetCategory::Materials:      return FLinearColor(FColor(0xE8, 0x61, 0x9D));
+	case EAssetCategory::Animations:     return FLinearColor(FColor(0xF0, 0x84, 0x2A));
+	case EAssetCategory::Audio:          return FLinearColor(FColor(0x2E, 0xCC, 0x71));
+	case EAssetCategory::Blueprints:     return FLinearColor(FColor(0xF5, 0xA7, 0x23));
+	case EAssetCategory::Levels:         return FLinearColor(FColor(0x6C, 0x7B, 0xFF));
+	default:                             return FLinearColor(FColor(0x7A, 0x82, 0x8C));
+	}
+}
+
 FText FToolsetStyle::LabelForCategory(ECategory Category)
 {
 	switch (Category)
