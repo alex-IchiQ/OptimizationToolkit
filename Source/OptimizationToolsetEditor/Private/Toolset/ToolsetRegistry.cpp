@@ -8,6 +8,7 @@
 #include "Toolset/Analyzer/Passes/LightingPass.h"
 #include "Toolset/Analyzer/Passes/InstancingCandidatePass.h"
 #include "Toolset/Analyzer/Passes/ProjectSettingsPass.h"
+#include "Toolset/Analyzer/Passes/BlueprintTickPass.h"
 
 #include "Toolset/Optimization/Fixes/EnableNaniteFix.h"
 #include "Toolset/Optimization/Fixes/GenerateLODsFix.h"
@@ -38,6 +39,7 @@ void FToolsetRegistry::RegisterDefaults()
 	AddPass(MakeUnique<FLightingPass>());
 	AddPass(MakeUnique<FInstancingCandidatePass>());
 	AddPass(MakeUnique<FProjectSettingsPass>());
+	AddPass(MakeUnique<FBlueprintTickPass>());
 
 	AddFix(MakeUnique<FEnableNaniteFix>());
 	AddFix(MakeUnique<FGenerateLODsFix>());

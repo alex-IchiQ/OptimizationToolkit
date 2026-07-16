@@ -39,8 +39,13 @@ Working:
   Nanite candidate, missing LODs, per-poly collision), `FTexturePass`
   (oversized, non-power-of-two, and missing mipmaps), `FMaterialPass` (slot
   count, empty/duplicate assignments, translucency, and two-sided review),
-  `FLightingPass` (too many movable lights), plus `FInstancingCandidatePass`
-  (conservative groups of compatible repeated static-mesh actors).
+  `FLightingPass` (too many movable lights), `FInstancingCandidatePass`
+  (conservative groups of compatible repeated static-mesh actors),
+  `FProjectSettingsPass` (rendering settings that cost everywhere; ignores the
+  level), and `FBlueprintTickPass` (static Blueprint actors ticking every frame,
+  reported per class). The last two carry no FixId on purpose — both would have
+  to rewrite something shared (DefaultEngine.ini, a Blueprint's class defaults)
+  from a panel that only scanned one level.
 - **Optimize** *(functional)* — lists findings that have a supported fix, with
   per-row **Apply** and an **Apply all** button; every fix is transactional
   (Undo/Redo) and the level auto-re-scans afterward. Fixes: `FEnableNaniteFix`,
@@ -72,10 +77,7 @@ Ordered by suggested priority:
    before ISM conversion or a delete. Also: `Fix_ConvertToInstances` is
    structural and currently runs under "Apply all" like any other fix; consider
    flagging structural fixes so bulk apply doesn't restructure a level silently.
-2. **More analyze passes** — shader instruction counts (version/platform-aware)
-   and Blueprints.
-3. **Project-settings audit** — arguably an analyze pass under `ECategory::Project`
-   (currently unused) rather than a cleanup action.
+2. **More analyze passes** — shader instruction counts (version/platform-aware).
 4. **Reports panel** — CSV/JSON export of `FScanResult`, before/after snapshots.
    `FFinding::TypeId` is the stable column to group and diff on.
 5. **Ship prep** — `Resources/Icon128.png` is missing (plugin browser + FAB), and
