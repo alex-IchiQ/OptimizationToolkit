@@ -33,9 +33,11 @@ range at a mid price. That gap is our product:
 
 Working:
 - **Dashboard** — severity summary cards + workflow guide.
-- **Analyze** *(functional)* — runs registered passes; findings with severity
-  (Critical/Major/Minor), category filter, search, and a **Focus** button that
-  frames the offending actor. Passes: `FStaticMeshPass` (excessive triangles,
+- **Analyze** *(functional)* — runs registered passes. Findings are grouped under
+  category headers in an `STreeView` (each header carries a count and a dot in the
+  group's worst severity, so a collapsed group still says whether it's worth
+  opening). Above that: severity toggles, search, and a **Focus** button per row
+  that frames the offending actor. Passes: `FStaticMeshPass` (excessive triangles,
   Nanite candidate, missing LODs, per-poly collision), `FTexturePass`
   (oversized, non-power-of-two, and missing mipmaps), `FMaterialPass` (slot
   count, empty/duplicate assignments, translucency, and two-sided review),
@@ -59,9 +61,10 @@ Working:
   real shipped numbers the source has to be pointed at a cooked
   DevelopmentAssetRegistry via `SetCurrentRegistrySource`; that selector is what
   a "Final Packaging" size mode would be built on.
-- **Optimize** *(functional)* — lists findings that have a supported fix, with
-  per-row **Apply** and an **Apply all** button; every fix is transactional
-  (Undo/Redo) and the level auto-re-scans afterward. Fixes: `FEnableNaniteFix`,
+- **Optimize** *(functional)* — the findings that have a supported fix, grouped by
+  category the same way, with per-row **Apply** and an **Apply all** button. Every
+  fix is transactional (Undo/Redo) and the level auto-re-scans afterward. Fixes:
+  `FEnableNaniteFix`,
   `FGenerateLODsFix`, `FSimpleCollisionFix`, `FReviewLightMobilityFix`,
   `FConvertToInstancesFix` (replaces a vetted group of repeated static-mesh
   actors with one HISM actor; reads the group from `FFinding::RelatedActors`),
@@ -166,6 +169,18 @@ approach and the APIs, write our own.
   on a **white** brush — hence `Toolset.Fill` / `Fill.Rounded` / `Fill.Pill`, and
   hence the SVG icons being recoloured to `#FFFFFF`. A dark brush times a bright
   colour is just a dark colour; a 6%-alpha brush times anything is invisible.
+
+**Count Slate brackets, don't eyeball them.** Restructuring a widget tree —
+lifting a card out of its `STableRow`, say — drops a `[` and leaves its `]`, and
+the compiler then blames a line far from the edit. Reading the nesting to check
+it failed twice in a row here. This finds it in seconds:
+
+```sh
+awk '{ n=gsub(/\[/,"["); m=gsub(/\]/,"]"); o+=n; c+=m }
+     END { printf "open=%d close=%d balance=%+d\n", o, c, o-c }' SToolsetWindow.cpp
+```
+Lambda captures (`[this]`) balance themselves, so they don't skew it. Per-function
+balance plus a line-by-line running depth pinpoints the exact stray bracket.
 
 **Verifying engine APIs: grep the class, not the file.** Two wrong assumptions
 came from grepping a header and assuming the match belonged to the class above it:

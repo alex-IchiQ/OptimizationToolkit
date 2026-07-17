@@ -201,7 +201,14 @@ re-queries dirty packages afterwards instead of trusting the return value).
   dark `#161719`.
 - **Colours are linear**: author every colour as `FLinearColor(FColor(0x..))`
   (sRGB→linear) — raw sRGB fractions wash the UI out to grey.
-- **Nav**: wide 216px sidebar, icon + label rows. Icons are white SVGs
+- **Nav**: wide 216px sidebar, icon + label rows. Analyze and Optimize list their
+  `ECategory` values underneath as sub-items with counts; picking one narrows that
+  panel to the category (`NavCategory`), and the section header itself means
+  "everything in here", so clicking it clears the narrowing. Clicking the section
+  you're already in folds its list away — that keeps the arrow an indicator rather
+  than a second hit target nested inside a button, which Slate handles badly.
+  Sub-items hide themselves when their category found nothing, so the menu never
+  offers a dead end. Icons are white SVGs
   (`Toolset.Icon.*`) tinted per state via `SImage.ColorAndOpacity` (teal when
   selected, grey otherwise). The **mascot** (`vera.png`, brush `Toolset.Mascot`)
   sits at the bottom in an `SScaleBox` (ScaleToFit, DownOnly) so it fills the space
@@ -213,6 +220,14 @@ re-queries dirty packages afterwards instead of trusting the return value).
 - Section switching: `SToolsetWindow` uses an `SWidgetSwitcher`; `EToolsetSection`
   indexes it.
 - Scan flow: `SToolsetWindow::RunScan()` calls `FLevelAnalyzer::AnalyzeCurrentLevel()`,
-  rebuilds `AllFindings` + `FixableFindings`, refreshes both list views.
+  rebuilds `AllFindings` + `FixableFindings`, then hands off to
+  `RebuildVisibleFindings()`.
+- Filtering: `RebuildVisibleFindings()` is the **one** place filters are applied —
+  scan, severity toggle, search and nav click all funnel through it. It rebuilds
+  both `STreeView`s via `BuildCategoryTree()` (a flat list in, category headers
+  out, as `FFindingNode`s) and re-expands the groups, because the nodes are new
+  objects each time and can't remember their own expansion. Analyze takes
+  severity + search + category; Optimize takes category only, since that toolbar
+  belongs to Analyze.
 - Apply flow: `SToolsetWindow::ApplyFix()` / `OnApplyAllFixes()` call
   `IOptimizationFix::Apply` then `RunScan()` to refresh.
