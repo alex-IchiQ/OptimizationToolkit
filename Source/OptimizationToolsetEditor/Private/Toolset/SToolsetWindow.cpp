@@ -115,10 +115,16 @@ TSharedRef<SWidget> SToolsetWindow::BuildSidebar()
 					.Text(LOCTEXT("BrandSub", "PROFILING TOOLSET"))
 				]
 
-				// Nav items (icon + label).
+				// Nav items (icon + label), with Analyze and Optimize listing their
+				// categories underneath.
 				+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 1))[ BuildNavItem(EToolsetSection::Dashboard, LOCTEXT("NavDashboard", "Dashboard"), "Toolset.Icon.Dashboard") ]
+
 				+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 1))[ BuildNavItem(EToolsetSection::Analyze,   LOCTEXT("NavAnalyze",   "Analyze"),   "Toolset.Icon.Analyze") ]
+				+ SVerticalBox::Slot().AutoHeight()[ BuildNavCategoryList(EToolsetSection::Analyze) ]
+
 				+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 1))[ BuildNavItem(EToolsetSection::Optimize,  LOCTEXT("NavOptimize",  "Optimize"),  "Toolset.Icon.Optimize") ]
+				+ SVerticalBox::Slot().AutoHeight()[ BuildNavCategoryList(EToolsetSection::Optimize) ]
+
 				+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 1))[ BuildNavItem(EToolsetSection::Profile,   LOCTEXT("NavProfile",   "Profile"),   "Toolset.Icon.Profile") ]
 				+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 1))[ BuildNavItem(EToolsetSection::Cleanup,   LOCTEXT("NavCleanup",   "Cleanup"),   "Toolset.Icon.Cleanup") ]
 				+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 1))[ BuildNavItem(EToolsetSection::Reports,   LOCTEXT("NavReports",   "Reports"),   "Toolset.Icon.Reports") ]
@@ -152,12 +158,154 @@ TSharedRef<SWidget> SToolsetWindow::BuildSidebar()
 		];
 }
 
+bool SToolsetWindow::SectionHasCategories(EToolsetSection Section)
+{
+	return Section == EToolsetSection::Analyze || Section == EToolsetSection::Optimize;
+}
+
+bool SToolsetWindow::IsNavExpanded(EToolsetSection Section) const
+{
+	return ExpandedNavSections.Contains(Section);
+}
+
+FReply SToolsetWindow::OnNavItemClicked(EToolsetSection Section)
+{
+	// Clicking the section you are already in folds its category list away,
+	// so the arrow isn't a separate hit target inside a button.
+	if (IsSectionSelected(Section) && SectionHasCategories(Section) && !NavCategory.IsSet())
+	{
+		if (IsNavExpanded(Section))
+		{
+			ExpandedNavSections.Remove(Section);
+		}
+		else
+		{
+			ExpandedNavSections.Add(Section);
+		}
+		return FReply::Handled();
+	}
+
+	// The section header means "everything in here", so it clears any category.
+	NavCategory.Reset();
+	SelectSection(Section);
+	if (SectionHasCategories(Section))
+	{
+		ExpandedNavSections.Add(Section);
+	}
+	RebuildVisibleFindings();
+	return FReply::Handled();
+}
+
+void SToolsetWindow::SelectSectionCategory(EToolsetSection Section, ECategory Category)
+{
+	NavCategory = Category;
+	SelectSection(Section);
+	RebuildVisibleFindings();
+}
+
+bool SToolsetWindow::IsNavCategorySelected(EToolsetSection Section, ECategory Category) const
+{
+	return IsSectionSelected(Section) && NavCategory.IsSet() && NavCategory.GetValue() == Category;
+}
+
+int32 SToolsetWindow::CountForNavCategory(EToolsetSection Section, ECategory Category) const
+{
+	const bool bOptimize = (Section == EToolsetSection::Optimize);
+	const TArray<TSharedPtr<FFinding>>& Source = bOptimize ? FixableFindings : AllFindings;
+
+	int32 Count = 0;
+	for (const TSharedPtr<FFinding>& Finding : Source)
+	{
+		if (!Finding.IsValid() || Finding->Category != Category)
+		{
+			continue;
+		}
+
+		// Analyze has severity/search filters above the list; a badge that ignored
+		// them would promise rows the panel won't show.
+		if (!bOptimize && !PassesSeverityAndSearch(*Finding))
+		{
+			continue;
+		}
+		++Count;
+	}
+	return Count;
+}
+
+TSharedRef<SWidget> SToolsetWindow::BuildNavCategoryList(EToolsetSection Section)
+{
+	TSharedRef<SVerticalBox> List = SNew(SVerticalBox);
+	for (uint8 Index = 0; Index < static_cast<uint8>(ECategory::Count); ++Index)
+	{
+		List->AddSlot().AutoHeight()
+		[
+			BuildNavSubItem(Section, static_cast<ECategory>(Index))
+		];
+	}
+	return List;
+}
+
+TSharedRef<SWidget> SToolsetWindow::BuildNavSubItem(EToolsetSection Section, ECategory Category)
+{
+	return SNew(SButton)
+		.ButtonStyle(&S(), "Toolset.Nav.Button")
+		.ContentPadding(FMargin(0))
+		// Hidden unless the parent is open and the category actually found
+		// something: an empty list of dead ends is worse than no list.
+		.Visibility_Lambda([this, Section, Category]()
+		{
+			return (IsNavExpanded(Section) && CountForNavCategory(Section, Category) > 0)
+				? EVisibility::Visible : EVisibility::Collapsed;
+		})
+		.OnClicked_Lambda([this, Section, Category]()
+		{
+			SelectSectionCategory(Section, Category);
+			return FReply::Handled();
+		})
+		[
+			SNew(SBorder)
+			// Indented to sit under the parent's label, not its icon.
+			.Padding(FMargin(32, 4, 10, 4))
+			.BorderImage(Brush("Toolset.Nav.Selected"))
+			.BorderBackgroundColor_Lambda([this, Section, Category]()
+			{
+				return IsNavCategorySelected(Section, Category) ? FLinearColor::White : FLinearColor(1, 1, 1, 0.0f);
+			})
+			[
+				SNew(SHorizontalBox)
+
+				+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.TextStyle(&S(), "Toolset.Text.Body")
+					.Text(FToolsetStyle::LabelForCategory(Category))
+					.ColorAndOpacity_Lambda([this, Section, Category]()
+					{
+						return IsNavCategorySelected(Section, Category)
+							? FSlateColor(FToolsetStyle::TextPrimary)
+							: FSlateColor(FToolsetStyle::TextSecondary);
+					})
+				]
+
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.TextStyle(&S(), "Toolset.Text.Subtle")
+					.Text_Lambda([this, Section, Category]()
+					{
+						return FText::AsNumber(CountForNavCategory(Section, Category));
+					})
+				]
+			]
+		];
+}
+
 TSharedRef<SWidget> SToolsetWindow::BuildNavItem(EToolsetSection Section, const FText& Label, const FName& IconName)
 {
 	return SNew(SButton)
 		.ButtonStyle(&S(), "Toolset.Nav.Button")
 		.ContentPadding(FMargin(0))
-		.OnClicked_Lambda([this, Section]() { SelectSection(Section); return FReply::Handled(); })
+		.OnClicked(this, &SToolsetWindow::OnNavItemClicked, Section)
 		[
 			SNew(SBorder)
 			.Padding(FMargin(10, 8))
@@ -203,6 +351,26 @@ TSharedRef<SWidget> SToolsetWindow::BuildNavItem(EToolsetSection Section, const 
 							? FSlateColor(FToolsetStyle::TextPrimary)
 							: FSlateColor(FToolsetStyle::TextSecondary);
 					})
+				]
+
+				// Expansion arrow: an indicator, not a second hit target — the row
+				// itself toggles the list.
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				[
+					SNew(SBox).WidthOverride(10).HeightOverride(10)
+					.Visibility(SectionHasCategories(Section) ? EVisibility::Visible : EVisibility::Collapsed)
+					[
+						SNew(SImage)
+						.Image_Lambda([this, Section]()
+						{
+							return IsNavExpanded(Section)
+								? FAppStyle::GetBrush("TreeArrow_Expanded")
+								: FAppStyle::GetBrush("TreeArrow_Collapsed");
+						})
+						.ColorAndOpacity(FSlateColor(FToolsetStyle::TextSecondary))
+					]
 				]
 			]
 		];
@@ -1301,19 +1469,8 @@ void SToolsetWindow::RunScan()
 		}
 	}
 
+	// Rebuilds both panels: it is the one place the filters are applied.
 	RebuildVisibleFindings();
-	BuildCategoryTree(FixableFindings, FixableTree);
-	if (FixTreeView.IsValid())
-	{
-		FixTreeView->RequestTreeRefresh();
-
-		// Groups open by default: a collapsed panel after a scan looks like it
-		// found nothing.
-		for (const TSharedPtr<FFindingNode>& Group : FixableTree)
-		{
-			FixTreeView->SetItemExpansion(Group, true);
-		}
-	}
 }
 
 bool SToolsetWindow::HasSupportedFix(const FFinding& F) const
@@ -1369,6 +1526,26 @@ void SToolsetWindow::RebuildVisibleFindings()
 			VisibleFindings.Add(F);
 		}
 	}
+	// Optimize takes the nav's category narrowing, but not the severity/search
+	// toolbar, which belongs to Analyze.
+	TArray<TSharedPtr<FFinding>> VisibleFixable;
+	for (const TSharedPtr<FFinding>& F : FixableFindings)
+	{
+		if (F.IsValid() && PassesNavCategory(*F))
+		{
+			VisibleFixable.Add(F);
+		}
+	}
+	BuildCategoryTree(VisibleFixable, FixableTree);
+	if (FixTreeView.IsValid())
+	{
+		FixTreeView->RequestTreeRefresh();
+		for (const TSharedPtr<FFindingNode>& Group : FixableTree)
+		{
+			FixTreeView->SetItemExpansion(Group, true);
+		}
+	}
+
 	BuildCategoryTree(VisibleFindings, VisibleTree);
 	if (FindingsTreeView.IsValid())
 	{
@@ -1383,7 +1560,7 @@ void SToolsetWindow::RebuildVisibleFindings()
 	}
 }
 
-bool SToolsetWindow::PassesFilter(const FFinding& F) const
+bool SToolsetWindow::PassesSeverityAndSearch(const FFinding& F) const
 {
 	if (!EnabledSeverities.Contains(F.Severity))
 	{
@@ -1398,6 +1575,16 @@ bool SToolsetWindow::PassesFilter(const FFinding& F) const
 		}
 	}
 	return true;
+}
+
+bool SToolsetWindow::PassesNavCategory(const FFinding& F) const
+{
+	return !NavCategory.IsSet() || F.Category == NavCategory.GetValue();
+}
+
+bool SToolsetWindow::PassesFilter(const FFinding& F) const
+{
+	return PassesSeverityAndSearch(F) && PassesNavCategory(F);
 }
 
 void SToolsetWindow::OnSearchChanged(const FText& NewText)

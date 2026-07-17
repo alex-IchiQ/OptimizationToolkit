@@ -32,7 +32,8 @@ enum class ECategory : uint8
 	Lighting,
 	Collision,
 	Blueprints,
-	Project
+	Project,
+	Count	// iteration bound; never assigned to a finding
 };
 
 /**

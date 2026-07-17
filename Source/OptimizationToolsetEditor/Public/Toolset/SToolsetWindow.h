@@ -82,6 +82,18 @@ private:
 	void SelectSection(EToolsetSection Section);
 	bool IsSectionSelected(EToolsetSection Section) const { return CurrentSection == Section; }
 
+	/** Analyze and Optimize list their categories underneath; the rest don't. */
+	static bool SectionHasCategories(EToolsetSection Section);
+	bool IsNavExpanded(EToolsetSection Section) const;
+	FReply OnNavItemClicked(EToolsetSection Section);
+
+	/** The category sub-items under Analyze / Optimize. */
+	TSharedRef<SWidget> BuildNavCategoryList(EToolsetSection Section);
+	TSharedRef<SWidget> BuildNavSubItem(EToolsetSection Section, ECategory Category);
+	void SelectSectionCategory(EToolsetSection Section, ECategory Category);
+	bool IsNavCategorySelected(EToolsetSection Section, ECategory Category) const;
+	int32 CountForNavCategory(EToolsetSection Section, ECategory Category) const;
+
 	// ---- Scan / filtering ---------------------------------------------------
 	FReply OnScanClicked();
 	void RunScan();
@@ -89,6 +101,10 @@ private:
 	void OnSearchChanged(const FText& NewText);
 	FReply OnToggleSeverityFilter(ESeverity Severity);
 	bool PassesFilter(const FFinding& F) const;
+
+	/** Split out so the nav badges can count what the severity/search filters would leave. */
+	bool PassesSeverityAndSearch(const FFinding& F) const;
+	bool PassesNavCategory(const FFinding& F) const;
 
 	// ---- Grouped trees ------------------------------------------------------
 	/** Groups findings under category headers, in ECategory order. */
@@ -142,6 +158,11 @@ private:
 	// Filters.
 	FString SearchFilter;
 	TSet<ESeverity> EnabledSeverities = { ESeverity::Critical, ESeverity::Major, ESeverity::Minor };
+
+	// Navigation: which sections have their category list open, and which category
+	// (if any) the active section is narrowed to.
+	TSet<EToolsetSection> ExpandedNavSections;
+	TOptional<ECategory> NavCategory;
 
 	// Cleanup: last run summary per action id, shown on its card.
 	TMap<FName, FText> CleanupResults;
