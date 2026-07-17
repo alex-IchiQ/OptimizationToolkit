@@ -681,7 +681,6 @@ TSharedRef<SWidget> SToolsetWindow::MakeFindingCard(TSharedPtr<FFinding> Item)
 						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Body").Text(LOCTEXT("FocusBtn", "Focus"))
 					]
 				]
-			]
 		];
 }
 
@@ -808,40 +807,39 @@ TSharedRef<SWidget> SToolsetWindow::MakeFixCard(TSharedPtr<FFinding> Item)
 			// Body.
 			+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(FMargin(14, 12))
 			[
-					SNew(SVerticalBox)
-					+ SVerticalBox::Slot().AutoHeight()
-					[
-						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Heading").Text(Item->Title)
-					]
-					+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2, 0, 0))
-					[
-						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle").Text(Item->Subject)
-					]
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Heading").Text(Item->Title)
 				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2, 0, 0))
+				[
+					SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle").Text(Item->Subject)
+				]
+			]
 
 				// Focus.
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 8, 0))
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 8, 0))
+			[
+				SNew(SButton)
+				.ButtonStyle(&S(), "Toolset.Button.Ghost")
+				.Visibility(Item->TargetActor.IsValid() ? EVisibility::Visible : EVisibility::Collapsed)
+				.OnClicked_Lambda([Item]() { FLevelAnalyzer::FocusActor(Item->TargetActor); return FReply::Handled(); })
 				[
-					SNew(SButton)
-					.ButtonStyle(&S(), "Toolset.Button.Ghost")
-					.Visibility(Item->TargetActor.IsValid() ? EVisibility::Visible : EVisibility::Collapsed)
-					.OnClicked_Lambda([Item]() { FLevelAnalyzer::FocusActor(Item->TargetActor); return FReply::Handled(); })
-					[
-						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Body").Text(LOCTEXT("FocusBtn2", "Focus"))
-					]
+					SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Body").Text(LOCTEXT("FocusBtn2", "Focus"))
 				]
+			]
 
-				// Apply fix.
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 12, 0))
+			// Apply fix.
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 12, 0))
+			[
+				SNew(SButton)
+				.ButtonStyle(&S(), "Toolset.Button.Primary")
+				.OnClicked_Lambda([this, Item]() { ApplyFix(Item); return FReply::Handled(); })
 				[
-					SNew(SButton)
-					.ButtonStyle(&S(), "Toolset.Button.Primary")
-					.OnClicked_Lambda([this, Item]() { ApplyFix(Item); return FReply::Handled(); })
-					[
-						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Body")
-						.ColorAndOpacity(FSlateColor(FLinearColor(FColor(0x16, 0x17, 0x19))))
-						.Text(FixLabel)
-					]
+					SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Body")
+					.ColorAndOpacity(FSlateColor(FLinearColor(FColor(0x16, 0x17, 0x19))))
+					.Text(FixLabel)
 				]
 			]
 		];
