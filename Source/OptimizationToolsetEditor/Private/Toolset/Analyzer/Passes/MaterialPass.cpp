@@ -1,8 +1,12 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "Toolset/Analyzer/Passes/MaterialPass.h"
+#include "Toolset/ToolsetCompat.h"
 
 #include "MaterialShared.h"
+#include "MaterialStatsCommon.h"
+#include "Shader.h"
+#include "RHIShaderPlatform.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Actor.h"
 #include "Materials/MaterialInterface.h"
@@ -13,6 +17,64 @@
 
 namespace
 {
+	/**
+	 * The compiled shader map for a material, or null when there isn't one.
+	 *
+	 * Null is normal, not exceptional: a material still compiling, or one that
+	 * failed to compile, has no shader map, and every stat below is unknowable
+	 * until it does. Reporting a "0 instruction" material would be a lie.
+	 */
+	const FMaterialResource* ResourceForMaterial(const UMaterialInterface& Material)
+	{
+#if OPTIMIZATION_MATERIAL_RESOURCE_BY_SHADER_PLATFORM
+		return Material.GetMaterialResource(GMaxRHIShaderPlatform);
+#else
+		return Material.GetMaterialResource(GMaxRHIFeatureLevel);
+#endif
+	}
+
+	/**
+	 * Instruction count of the heaviest shader the engine considers representative
+	 * of this material, plus which one that was.
+	 *
+	 * A material compiles to dozens of permutations, so "the" instruction count
+	 * needs a choice of shader. We ask the engine which ones represent the material
+	 * — the same answer its own stats panel uses — rather than inventing a rule.
+	 * `FMaterialStatsUtils::GetRepresentativeInstructionCounts()` does exactly this
+	 * job but is not exported, so we walk its exported half instead.
+	 */
+	int32 WorstInstructionCount(const FMaterialResource& Resource, FString& OutShaderDescription)
+	{
+		const FMaterialShaderMap* ShaderMap = Resource.GetGameThreadShaderMap();
+		if (!ShaderMap)
+		{
+			return INDEX_NONE;
+		}
+
+		TMap<FName, TArray<FMaterialStatsUtils::FRepresentativeShaderInfo>> ShaderTypes;
+		FMaterialStatsUtils::GetRepresentativeShaderTypesAndDescriptions(ShaderTypes, &Resource);
+
+		int32 Worst = INDEX_NONE;
+		for (const TPair<FName, TArray<FMaterialStatsUtils::FRepresentativeShaderInfo>>& Pair : ShaderTypes)
+		{
+			for (const FMaterialStatsUtils::FRepresentativeShaderInfo& Info : Pair.Value)
+			{
+				FShaderType* ShaderType = FindShaderTypeByName(Info.ShaderName);
+				if (!ShaderType)
+				{
+					continue;
+				}
+
+				const int32 Count = static_cast<int32>(ShaderMap->GetMaxNumInstructionsForShader(ShaderType));
+				if (Count > Worst)
+				{
+					Worst = Count;
+					OutShaderDescription = Info.ShaderDescription;
+				}
+			}
+		}
+		return Worst;
+	}
 	/** Static-mesh asset plus its effective component material assignments. */
 	struct FMaterialSlotKey
 	{
@@ -148,6 +210,52 @@ void FMaterialPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 	{
 		UMaterialInterface* Material = Pair.Key;
 		const FText Subject = FText::FromString(Material->GetName());
+
+		// --- Shader cost: samplers and instructions ---------------------------
+		//
+		// Both need the compiled shader map, so both are skipped in the same
+		// breath when there isn't one.
+		if (const FMaterialResource* Resource = ResourceForMaterial(*Material))
+		{
+			// -1 means no valid shader map (still compiling, or a compile error).
+			const int32 Samplers = Resource->GetSamplerUsage();
+			if (Samplers > T.MaterialSamplerBudget)
+			{
+				// 16 is the hard limit on most platforms, so past the budget this is
+				// heading for a compile failure, not just a slow material.
+				const ESeverity Severity = Samplers >= 16 ? ESeverity::Major : ESeverity::Minor;
+
+				FFinding F(TEXT("Material.SamplerCount"), Severity, ECategory::Materials,
+					LOCTEXT("SamplerCountTitle", "Material uses many texture samplers"),
+					FText::Format(LOCTEXT("SamplerCountSubject", "{0} ({1} samplers)"), Subject, FText::AsNumber(Samplers)));
+				F.WhyItMatters = FText::Format(
+					LOCTEXT("SamplerCountWhy", "Each sampler is a texture fetch per pixel, and most platforms cap a material at 16. The budget is {0}."),
+					FText::AsNumber(T.MaterialSamplerBudget));
+				F.HowToFix = LOCTEXT("SamplerCountFix", "Pack greyscale maps into channels of one texture, or switch shared textures to Shared:Wrap sampler source.");
+				F.TargetActor = Pair.Value;
+				F.TargetAsset = Material;
+				Out.Findings.Add(MoveTemp(F));
+			}
+
+			FString WorstShader;
+			const int32 Instructions = WorstInstructionCount(*Resource, WorstShader);
+			if (Instructions > T.MaterialInstructionBudget)
+			{
+				const ESeverity Severity = Instructions > T.MaterialInstructionBudget * 2
+					? ESeverity::Major : ESeverity::Minor;
+
+				FFinding F(TEXT("Material.InstructionCount"), Severity, ECategory::Materials,
+					LOCTEXT("InstructionCountTitle", "Material shader is instruction-heavy"),
+					FText::Format(LOCTEXT("InstructionCountSubject", "{0} ({1} instructions)"), Subject, FText::AsNumber(Instructions)));
+				F.WhyItMatters = FText::Format(
+					LOCTEXT("InstructionCountWhy", "{0} costs {1} instructions per pixel it covers, against a budget of {2}. The cost scales with how much of the screen it fills."),
+					FText::FromString(WorstShader), FText::AsNumber(Instructions), FText::AsNumber(T.MaterialInstructionBudget));
+				F.HowToFix = LOCTEXT("InstructionCountFix", "Bake constant maths into textures, move per-pixel work to the vertex shader, or trim unused nodes feeding the output.");
+				F.TargetActor = Pair.Value;
+				F.TargetAsset = Material;
+				Out.Findings.Add(MoveTemp(F));
+			}
+		}
 
 		if (IsTranslucentBlendMode(*Material))
 		{

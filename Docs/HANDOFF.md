@@ -31,17 +31,36 @@ range at a mid price. That gap is our product:
 **Compiles and runs in UE.** Window opens via the **Optimize** toolbar button or
 **Window → Optimization Toolset**.
 
+The UI is **model + panels**: `FToolsetModel` owns the scan state, the filters and
+the fix operations, and every panel is its own widget under `Private/Toolset/Panels/`.
+`SToolsetWindow` is chrome only — sidebar, header, switcher. See
+[ARCHITECTURE.md](ARCHITECTURE.md); *"How to add a panel"* is the entry point.
+
 Working:
-- **Dashboard** — severity summary cards + workflow guide.
+- **Dashboard** — a "Level at a glance" card (meshes / polycount / actors /
+  materials / lights, from `FScanResult::Stats`), severity summary cards, and a
+  workflow guide. Each stat carries a delta pill against the previous scan, so a
+  fix that drops 40k triangles shows its work; the pill is hidden until a second
+  scan exists. Every number states its scope in a tooltip — geometry is
+  static-mesh LOD0 only, counted per ISM instance — because a user comparing it
+  against the editor's own statistics window would otherwise read a difference as
+  a bug.
 - **Analyze** *(functional)* — runs registered passes. Findings are grouped under
   category headers in an `STreeView` (each header carries a count and a dot in the
   group's worst severity, so a collapsed group still says whether it's worth
   opening). Above that: severity toggles, search, and a **Focus** button per row
-  that frames the offending actor. Passes: `FStaticMeshPass` (excessive triangles,
-  Nanite candidate, missing LODs, per-poly collision), `FTexturePass`
-  (oversized, non-power-of-two, and missing mipmaps), `FMaterialPass` (slot
-  count, empty/duplicate assignments, translucency, and two-sided review),
-  `FLightingPass` (too many movable lights), `FInstancingCandidatePass`
+  that frames the offending actor. A finding in a loaded sub-level carries that
+  level's name (`FFinding::LevelName`), stamped centrally by `FLevelAnalyzer`
+  rather than by each pass. Passes: `FStaticMeshPass` (excessive triangles,
+  Nanite candidate, missing LODs, per-poly collision, no mesh assigned),
+  `FTexturePass` (oversized, non-power-of-two, and missing mipmaps — "oversized"
+  means texels-per-metre from the streamer's `TexelFactor`, which accounts for UV
+  tiling, and falls back to a plain size threshold *that says so* when the level
+  has no texture streaming data built),
+  `FMaterialPass` (slot count, empty/duplicate assignments, translucency,
+  two-sided review, texture samplers, shader instructions),
+  `FLightingPass` (too many movable lights, high lightmap resolution),
+  `FInstancingCandidatePass`
   (conservative groups of compatible repeated static-mesh actors),
   `FProjectSettingsPass` (rendering settings that cost everywhere; ignores the
   level), `FBlueprintTickPass` (static Blueprint actors ticking every frame,
@@ -70,8 +89,16 @@ Working:
   actors with one HISM actor; reads the group from `FFinding::RelatedActors`),
   `FNormalmapCompressionFix` and `FDisableTextureSRGBFix` (edit the texture named
   by `FFinding::TargetAsset`).
-- **Profile** *(functional)* — one-click `stat` command stacks (fps/unit/gpu/
-  scenerendering/rhi/initviews/streaming/profilegpu/clear).
+- **Profile** *(functional)* — `stat` stacks, complexity view modes (light /
+  shader / quad overdraw / lightmap density / stationary overlap), and Nanite,
+  Lumen and VSM visualizer channels, plus a free-text console box. Each entry is
+  an `FProfileAction`: a command string and a view mode, so the panel is arrays
+  rather than a hundred buttons. **Every command string is verified against the
+  engine source** — see the block comment naming which header each came from. Two
+  traps live here: `viewmode` as a console command is `UGameViewportClient`'s, so
+  it does nothing in the editor without PIE (we call
+  `FEditorViewportClient::SetViewMode` instead); and only Nanite's cvar force-
+  enables its own show flag, which is why every action also carries a view mode.
 - **Settings** *(functional)* — project-wide analyze thresholds under
   **Project Settings → Plugins → Optimization Toolset**.
 
@@ -91,7 +118,13 @@ Placeholder panels (structured, list planned actions, not yet implemented):
 
 ## Roadmap / next steps
 
-Ordered by suggested priority:
+Ordered by suggested priority.
+
+**A feature-by-feature audit against Perfector: Level's published docs**
+(`core-features`, read 2026-07-17) produced six items; **all six are now done** —
+see "Closed against Perfector" below. What remains is our own agenda. Note
+Perfector still only advises, so none of that work touched our actual
+differentiator: the fixes.
 
 1. **Reports panel** — the last placeholder. CSV/JSON export of `FScanResult`,
    before/after snapshots. `FFinding::TypeId` is the stable column to group and
@@ -113,9 +146,37 @@ Ordered by suggested priority:
    UE 5.2+ precaches automatically, so building a bundled `.spc` cache (HXS's
    "Stutter Killer") would be chasing a solved problem; auditing the settings is
    the part still worth doing.
-6. **More analyze passes** — shader instruction counts (version/platform-aware).
-7. **Ship prep** — `Resources/Icon128.png` is missing (plugin browser + FAB), and
+6. **Ship prep** — `Resources/Icon128.png` is missing (plugin browser + FAB), and
    `.uplugin` has empty `CreatedBy` / `DocsURL` / `SupportURL`.
+
+### Closed against Perfector (2026-07-17)
+
+- **Profile visualizers** — `SProfilePanel` grew from nine stat buttons to
+  sectioned Nanite / Lumen / VSM / complexity suites plus a console box.
+- **Empty meshes** — `Mesh.EmptyMesh` in `FStaticMeshPass`.
+- **Lightmap resolution** — `Lighting.LightmapResolution` in `FLightingPass`.
+- **Sampler + instruction counts** — `Material.SamplerCount` /
+  `Material.InstructionCount` in `FMaterialPass`.
+- **Honest oversized textures** — `Texture.Oversized` now judges texels-per-metre.
+- **Child levels** — *it turned out we already did this.* `TActorIterator` walks
+  `UWorld::GetLevels()`, which is the persistent level plus every loaded
+  sub-level; the earlier claim here that we scan "the current level only" was
+  written without checking and was simply false. Perfector's own docs say
+  "optionally scans **loaded** sub-levels" — nothing can read an unloaded one. So
+  the real gaps were smaller: findings never said *which* sub-level an actor was
+  in (now `FFinding::LevelName`, stamped centrally in `FLevelAnalyzer`), and
+  there was no way to opt out (now `bIncludeSubLevels`).
+
+**Seen in Perfector's docs and deliberately not queued** (so nobody re-derives
+them): *overlapping UVs* and *too many shadow casters* (both real, both a lot of
+work for a check we can't auto-fix); *construction script work* (hard to judge
+statically without false positives); *right-click copy asset path* (worth doing
+whenever the finding row grows a context menu); *severity weights* (our
+`FAnalyzeThresholds` settings cover the same need from the other end); *folder
+scope* (unclear whether it filters actors or assets — two different answers, and
+nobody has asked for either). Also note where **we** are ahead and they are not:
+every fix in Optimize, Cleanup, the project-settings audit, the health score,
+movable-light budget, non-power-of-two, and the Blueprint dependency chain.
 
 ## Working agreements
 
@@ -170,6 +231,28 @@ approach and the APIs, write our own.
   hence the SVG icons being recoloured to `#FFFFFF`. A dark brush times a bright
   colour is just a dark colour; a 6%-alpha brush times anything is invisible.
 
+**`SButton` adds the style's padding to yours.** The border padding is
+`ContentPadding + NormalPadding` (or `+ PressedPadding`), not whichever you set
+last. So a style carrying `SetNormalPadding(14, 7)` silently inflates any button
+you meant to size with an `SBox` — hence `Toolset.Button.Scan` being a
+padding-free clone of `Toolset.Button.Primary`.
+
+**A rounded list background needs transparent rows.** `STableViewBase::OnPaint`
+draws the `FTableViewStyle` background across the full geometry, so a
+`FSlateRoundedBoxBrush` there rounds all four corners — but rows then paint their
+*own* backgrounds on top, and the stock `TableView.Row` brushes are opaque
+rectangles. Rows stack from the top, so they hide the top corners while the empty
+space under the last row still shows the arc: the list looks rounded **at the
+bottom only**. Blank out all eight row brushes (`Toolset.TableRow`); our cards
+carry their own background anyway.
+
+**`STableRow` already has an expander arrow.** In tree mode its
+`ConstructChildren()` builds an `SExpanderArrow` itself, and `SetContent()`
+*preserves* it (`SetRowContent()` is the one that replaces it — the two are easy
+to swap in memory, and the engine's own doc comment above them reads as if they
+were). Adding your own arrow on top silently draws two. Just put the header in the
+row's content slot and let the row supply the arrow.
+
 **Count Slate brackets, don't eyeball them.** Restructuring a widget tree —
 lifting a card out of its `STableRow`, say — drops a `[` and leaves its `]`, and
 the compiler then blames a line far from the edit. Reading the nesting to check
@@ -182,6 +265,20 @@ awk '{ n=gsub(/\[/,"["); m=gsub(/\]/,"]"); o+=n; c+=m }
 Lambda captures (`[this]`) balance themselves, so they don't skew it. Per-function
 balance plus a line-by-line running depth pinpoints the exact stray bracket.
 
+**Exported ≠ reachable, and deprecated ≠ broken-loudly.** Two traps found while
+adding the material shader checks, either of which would have shipped silently:
+- `UMaterialInterface::GetMaterialResource(ERHIFeatureLevel::Type, ...)` is not
+  merely `UE_DEPRECATED(5.7)` — on 5.7 it is `final` and **returns NULL**. The old
+  call still compiles and runs, and just hands back nothing. Hence
+  `OPTIMIZATION_MATERIAL_RESOURCE_BY_SHADER_PLATFORM`.
+- `FMaterialStatsUtils::GetRepresentativeInstructionCounts()` has **no**
+  `MATERIALEDITOR_API`, though its neighbours in the same class do — so it cannot
+  be linked from outside. Its exported sibling `ExtractMatertialStatsInfo()` is no
+  help either: the `FShaderStatsInfo` it fills is defined in a *private* header.
+  `FMaterialPass` therefore walks the representative shader types itself, using
+  the exported half (`GetRepresentativeShaderTypesAndDescriptions` +
+  `FMaterialShaderMap::GetMaxNumInstructionsForShader`).
+
 **Verifying engine APIs: grep the class, not the file.** Two wrong assumptions
 came from grepping a header and assuming the match belonged to the class above it:
 - `bSupportAllShaderPermutations` is on `URendererOverrideSettings`, not
@@ -190,6 +287,11 @@ came from grepping a header and assuming the match belonged to the class above i
   on `UGameMapsSettings`; use the static getters.
 - Also check the *property* name, not the console variable: the GI method member
   is `DynamicGlobalIllumination`, while the cvar is `r.DynamicGlobalIlluminationMethod`.
+
+**A scan already covers loaded sub-levels.** `TActorIterator` walks
+`UWorld::GetLevels()`, not just the persistent level — so anything reasoning about
+"the current level" is reasoning about all of them. Don't build sub-level support;
+it exists. (`bIncludeSubLevels` turns it *off*.)
 
 **The engine may already do what you're about to check for.** `UTexture` forces
 `SRGB = false` whenever compression is Normalmap/Masks/Alpha/HDR

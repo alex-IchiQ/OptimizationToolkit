@@ -21,7 +21,26 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 	{
 		UStaticMeshComponent* Comp = Actor->GetStaticMeshComponent();
 		UStaticMesh* Mesh = Comp ? Comp->GetStaticMesh() : nullptr;
-		if (!Mesh || Reported.Contains(Mesh))
+
+		// --- No mesh at all: the actor costs a transform and renders nothing.
+		//
+		// Per actor, not per asset: there is no asset to de-dupe by, and each one
+		// is its own mistake. Deliberately limited to AStaticMeshActor rather than
+		// any component with a null mesh — a Blueprint's StaticMeshComponent is
+		// routinely left empty and filled in at runtime, so flagging those would
+		// report working code as broken.
+		if (!Mesh)
+		{
+			FFinding F(TEXT("Mesh.EmptyMesh"), ESeverity::Minor, ECategory::Meshes,
+				LOCTEXT("EmptyMeshTitle", "Static mesh actor has no mesh assigned"), FText::FromString(Actor->GetActorNameOrLabel()));
+			F.WhyItMatters = LOCTEXT("EmptyMeshWhy", "The actor still loads, ticks its transform and takes up a slot in the level, but draws nothing.");
+			F.HowToFix = LOCTEXT("EmptyMeshFix", "Assign the intended mesh, or delete the actor if it is left over from an earlier setup.");
+			F.TargetActor = Actor;
+			Out.Findings.Add(MoveTemp(F));
+			continue;
+		}
+
+		if (Reported.Contains(Mesh))
 		{
 			continue;
 		}

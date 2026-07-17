@@ -32,6 +32,7 @@ public:
 	static const FLinearColor SurfaceCardHover;
 	static const FLinearColor TextPrimary;
 	static const FLinearColor TextSecondary;
+	static const FLinearColor OnAccent;			// text / icons drawn on the accent fill
 
 	static const FLinearColor SeverityCritical;
 	static const FLinearColor SeverityMajor;

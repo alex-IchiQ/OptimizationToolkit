@@ -60,6 +60,16 @@ namespace
 	{
 		FChainResult Result;
 
+		// Hard references only, and it has to be asked for: EDependencyCategory::Package
+		// with a default FDependencyQuery returns hard *and* soft dependencies. That
+		// was this pass's original bug — a soft reference is precisely the thing that
+		// does *not* load with the Blueprint, so counting one inflated the chain and
+		// then advised making soft something that already was.
+		//
+		// (Note this is the opposite lever from the ::All gotcha in HANDOFF: that one
+		// is about the dependency *category*, this is about the query *flags*.)
+		const UE::AssetRegistry::FDependencyQuery HardOnly(UE::AssetRegistry::EDependencyQuery::Hard);
+
 		TSet<FName> Visited;
 		TArray<FName> Pending;
 		Visited.Add(Root);
@@ -84,7 +94,7 @@ namespace
 
 			TArray<FName> Dependencies;
 			AssetRegistry.GetDependencies(PackageName, Dependencies,
-				UE::AssetRegistry::EDependencyCategory::Package);
+				UE::AssetRegistry::EDependencyCategory::Package, HardOnly);
 
 			for (const FName Dependency : Dependencies)
 			{
@@ -101,6 +111,26 @@ namespace
 			return A.Bytes > B.Bytes;
 		});
 		return Result;
+	}
+
+	/**
+	 * Says the check couldn't run, instead of returning quietly.
+	 *
+	 * Every way this pass can fail looks exactly like a clean level from the
+	 * outside, which is the most expensive kind of wrong a tool can be: it costs
+	 * trust in every *other* finding too. This turns each of those exits into a
+	 * visible row that names the reason and what to do about it.
+	 */
+	FFinding MakeUnavailableFinding(const FText& Reason)
+	{
+		FFinding F(TEXT("Blueprint.DependencyCheckUnavailable"), ESeverity::Minor, ECategory::Blueprints,
+			LOCTEXT("UnavailableTitle", "Blueprint dependency check did not run"),
+			LOCTEXT("UnavailableSubject", "Dependency chain sizes"));
+		F.WhyItMatters = FText::Format(
+			LOCTEXT("UnavailableWhy", "This scan could not measure what Blueprints drag in, because {0}. No news here is not good news — heavy Blueprints would simply be missing from the results."),
+			Reason);
+		F.HowToFix = LOCTEXT("UnavailableFix", "Wait for the editor to finish scanning assets, then scan again.");
+		return F;
 	}
 
 	/** "T_Sky_8K (210 MB), SM_Rock (40 MB)" — the assets worth looking at first. */
@@ -124,6 +154,8 @@ void FBlueprintDependencyPass::Run(const FLevelScanContext& Context, const FAnal
 {
 	if (!IAssetManagerEditorModule::IsAvailable())
 	{
+		Out.Findings.Add(MakeUnavailableFinding(
+			LOCTEXT("NoAssetManagerEditor", "the Asset Manager Editor plugin is not enabled")));
 		return;
 	}
 
@@ -135,10 +167,31 @@ void FBlueprintDependencyPass::Run(const FLevelScanContext& Context, const FAnal
 	// Blueprint is cheap" — the opposite of what the pass exists to say.
 	if (AssetRegistry.IsLoadingAssets())
 	{
+		Out.Findings.Add(MakeUnavailableFinding(
+			LOCTEXT("RegistryLoading", "the editor is still scanning the project's assets")));
 		return;
 	}
 
 	IAssetManagerEditorModule& EditorModule = IAssetManagerEditorModule::Get();
+
+	// Force the registry source to initialize before asking it for any size.
+	//
+	// FAssetManagerEditorModule::StartupModule() leaves CurrentRegistrySource null
+	// and only fills it lazily, from GetCurrentRegistrySource() or
+	// SetCurrentRegistrySource(). GetIntegerValueForCustomColumn() does *not* — it
+	// reads CurrentRegistrySource directly and returns false while it is still
+	// null. So without this line every size came back 0, every chain measured 0
+	// bytes, and the pass reported nothing at any threshold — until something else
+	// in the editor (opening a Size Map, say) happened to initialize it first, at
+	// which point the same scan suddenly worked. This one call is the whole fix.
+	const FAssetManagerEditorRegistrySource* RegistrySource = EditorModule.GetCurrentRegistrySource();
+	if (!RegistrySource || !RegistrySource->HasRegistry())
+	{
+		Out.Findings.Add(MakeUnavailableFinding(
+			LOCTEXT("NoRegistrySource", "no asset registry source is available yet")));
+		return;
+	}
+
 	const int64 ThresholdBytes = static_cast<int64>(T.DependencyChainSizeMB) * 1024 * 1024;
 
 	// One entry per Blueprint class: the chain is a property of the asset, so a

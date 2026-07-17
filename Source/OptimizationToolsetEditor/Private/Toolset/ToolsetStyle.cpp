@@ -1,6 +1,7 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "Toolset/ToolsetStyle.h"
+#include "Styling/AppStyle.h"
 #include "Styling/SlateStyleRegistry.h"
 #include "Styling/SlateStyleMacros.h"
 #include "Styling/CoreStyle.h"
@@ -27,6 +28,7 @@ const FLinearColor FToolsetStyle::SurfaceCard     = FLinearColor(FColor(0x2E, 0x
 const FLinearColor FToolsetStyle::SurfaceCardHover= FLinearColor(FColor(0x37, 0x3C, 0x43)); // card hover
 const FLinearColor FToolsetStyle::TextPrimary     = FLinearColor(FColor(0xE6, 0xE8, 0xEB));
 const FLinearColor FToolsetStyle::TextSecondary   = FLinearColor(FColor(0x96, 0x9A, 0xA0));
+const FLinearColor FToolsetStyle::OnAccent        = FLinearColor(FColor(0x16, 0x17, 0x19)); // on teal
 
 const FLinearColor FToolsetStyle::SeverityCritical= FLinearColor(FColor(0xEF, 0x4A, 0x3F));
 const FLinearColor FToolsetStyle::SeverityMajor   = FLinearColor(FColor(0xF5, 0xA7, 0x23));
@@ -85,6 +87,36 @@ TSharedRef<FSlateStyleSet> FToolsetStyle::Create()
 	Style->Set("Toolset.Card.Hover", new FSlateRoundedBoxBrush(SurfaceCardHover, 8.0f, FLinearColor(FColor(0x47, 0x4D, 0x55)), 1.0f));
 	Style->Set("Toolset.Card.Inner", new FSlateRoundedBoxBrush(SurfacePanel, 6.0f));
 
+	// The tree's own backdrop. Stock TreeView draws a hard-cornered dark rectangle,
+	// which reads as a hole punched through the island it sits on; this rounds it to
+	// match the surrounding radii.
+	{
+		FTableViewStyle TreeView = FAppStyle::Get().GetWidgetStyle<FTableViewStyle>("TreeView");
+		TreeView.SetBackgroundBrush(FSlateRoundedBoxBrush(SurfaceBase, 8.0f));
+		Style->Set("Toolset.TreeView", TreeView);
+	}
+
+	// Transparent rows, so the rounded backdrop above survives.
+	//
+	// STableViewBase paints its background across the full geometry — all four
+	// corners round. But rows paint their *own* backgrounds on top, and the stock
+	// TableView.Row brushes are opaque squares. Rows stack from the top, so they
+	// cover the top corners while the empty space below the last row still shows
+	// the arc: the tree ends up rounded at the bottom only. Our finding cards draw
+	// their own card background anyway, so every row state here is nothing.
+	{
+		FTableRowStyle Row = FAppStyle::Get().GetWidgetStyle<FTableRowStyle>("TableView.Row");
+		Row.SetEvenRowBackgroundBrush(FSlateNoResource());
+		Row.SetEvenRowBackgroundHoveredBrush(FSlateNoResource());
+		Row.SetOddRowBackgroundBrush(FSlateNoResource());
+		Row.SetOddRowBackgroundHoveredBrush(FSlateNoResource());
+		Row.SetActiveBrush(FSlateNoResource());
+		Row.SetActiveHoveredBrush(FSlateNoResource());
+		Row.SetInactiveBrush(FSlateNoResource());
+		Row.SetInactiveHoveredBrush(FSlateNoResource());
+		Style->Set("Toolset.TableRow", Row);
+	}
+
 	// Pills / chips.
 	Style->Set("Toolset.Pill",        new FSlateRoundedBoxBrush(FLinearColor(1, 1, 1, 0.06f), 10.0f));
 	Style->Set("Toolset.Pill.Accent", new FSlateRoundedBoxBrush(AccentDim, 10.0f));
@@ -126,6 +158,19 @@ TSharedRef<FSlateStyleSet> FToolsetStyle::Create()
 		Style->Set("Toolset.Button.Primary", PrimaryButton);
 	}
 
+	// Scan button: the same accent as Primary, but padding-free so the chunky
+	// square block in the sidebar is sized by its SBox rather than by the style
+	// (SButton adds NormalPadding *on top of* ContentPadding).
+	{
+		FButtonStyle ScanButton;
+		ScanButton.SetNormal (FSlateRoundedBoxBrush(Accent, 8.0f));
+		ScanButton.SetHovered(FSlateRoundedBoxBrush(FLinearColor(Accent.R * 1.12f, Accent.G * 1.12f, Accent.B * 1.12f, 1.0f), 8.0f));
+		ScanButton.SetPressed(FSlateRoundedBoxBrush(AccentDim, 8.0f));
+		ScanButton.SetNormalPadding(FMargin(0));
+		ScanButton.SetPressedPadding(FMargin(0));
+		Style->Set("Toolset.Button.Scan", ScanButton);
+	}
+
 	// Ghost / secondary button.
 	{
 		FButtonStyle Ghost;
@@ -161,6 +206,12 @@ TSharedRef<FSlateStyleSet> FToolsetStyle::Create()
 		.SetFont(FCoreStyle::GetDefaultFontStyle(*FontBold, 30))
 		.SetColorAndOpacity(FSlateColor(TextPrimary)));
 
+	// Between Heading and Metric: five of these sit in one row, so the big Metric
+	// size would wrap a polycount and blow the card apart.
+	Style->Set("Toolset.Text.StatValue", FTextBlockStyle()
+		.SetFont(FCoreStyle::GetDefaultFontStyle(*FontBold, 15))
+		.SetColorAndOpacity(FSlateColor(TextPrimary)));
+
 	Style->Set("Toolset.Text.NavLabel", FTextBlockStyle()
 		.SetFont(FCoreStyle::GetDefaultFontStyle(*FontBold, 11))
 		.SetColorAndOpacity(FSlateColor(TextPrimary)));
@@ -177,6 +228,9 @@ TSharedRef<FSlateStyleSet> FToolsetStyle::Create()
 		Style->Set("Toolset.Icon.Profile",   new FSlateVectorImageBrush(Res / TEXT("profile.svg"),   IconSize));
 		Style->Set("Toolset.Icon.Cleanup",   new FSlateVectorImageBrush(Res / TEXT("cleanup.svg"),   IconSize));
 		Style->Set("Toolset.Icon.Reports",   new FSlateVectorImageBrush(Res / TEXT("reports.svg"),   IconSize));
+
+		// Bigger: this one sits above a label on the scan button, not in a nav row.
+		Style->Set("Toolset.Icon.Scan", new FSlateVectorImageBrush(Res / TEXT("scan.svg"), FVector2D(26.0f, 26.0f)));
 
 		// Mascot (cropped portrait 515x1400 -> keep the 0.368 aspect).
 		Style->Set("Toolset.Mascot", new FSlateImageBrush(Res / TEXT("vera.png"), FVector2D(184.0f, 500.0f)));

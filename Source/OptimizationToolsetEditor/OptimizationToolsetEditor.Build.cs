@@ -31,6 +31,12 @@ public class OptimizationToolsetEditor : ModuleRules
 			"WorkspaceMenuStructure",
 			"ApplicationCore",
 			"RenderCore",
+			// Material shader stats: FMaterialStatsUtils lives here. The engine's own
+			// GetRepresentativeInstructionCounts() is not exported (its neighbours in
+			// the same class are), so FMaterialPass walks the representative shader
+			// types itself using the exported half of that API.
+			"MaterialEditor",
+			"RHI",
 			"AssetRegistry",
 			"AssetTools",
 			"EngineSettings",

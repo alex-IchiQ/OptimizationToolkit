@@ -25,3 +25,12 @@
 #define OPTIMIZATION_HAS_NANITE         OPTIMIZATION_UE_VERSION_AT_LEAST(5, 0)
 #define OPTIMIZATION_HAS_VSM_CONTROLS   OPTIMIZATION_UE_VERSION_AT_LEAST(5, 4)
 #define OPTIMIZATION_HAS_MODERN_TSR     OPTIMIZATION_UE_VERSION_AT_LEAST(5, 3)
+
+/**
+ * 5.7 deprecated `UMaterialInterface::GetMaterialResource(ERHIFeatureLevel::Type, ...)`
+ * in favour of an `EShaderPlatform` overload — and made the old one `final`
+ * returning NULL, so on 5.7 the feature-level call compiles, runs, and silently
+ * hands back nothing. Earlier engines only have the feature-level overload.
+ * Anything reaching for a material's compiled shader map has to pick per version.
+ */
+#define OPTIMIZATION_MATERIAL_RESOURCE_BY_SHADER_PLATFORM OPTIMIZATION_UE_VERSION_AT_LEAST(5, 7)

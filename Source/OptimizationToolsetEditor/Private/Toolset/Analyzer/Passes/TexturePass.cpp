@@ -4,6 +4,7 @@
 
 #include "SceneTypes.h"
 #include "Engine/Texture2D.h"
+#include "Engine/TextureStreamingTypes.h"
 #include "GameFramework/Actor.h"
 #include "Components/PrimitiveComponent.h"
 
@@ -11,6 +12,20 @@
 
 namespace
 {
+	/**
+	 * Texels this texture delivers per metre of surface, for one usage of it.
+	 *
+	 * `TexelFactor` is world units per UV unit — how much of the world one tile of
+	 * the texture is stretched over — which is why this beats judging the texture's
+	 * own dimensions: it accounts for UV tiling. A 1m tile repeated across a 50m
+	 * wall reads as 1m of coverage, not 50m, so a tiling material is not accused of
+	 * being oversized just for being big on screen.
+	 */
+	float TexelsPerMetre(int32 TextureSize, float TexelFactor)
+	{
+		// Unreal's world unit is a centimetre.
+		return (TextureSize * 100.0f) / TexelFactor;
+	}
 	/** Groups whose size/mip rules are deliberately different from normal art content. */
 	bool IsSpecialPurposeTextureGroup(TextureGroup Group)
 	{
@@ -36,6 +51,14 @@ namespace
 void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThresholds& T, FScanResult& Out) const
 {
 	TMap<UTexture2D*, TWeakObjectPtr<AActor>> TextureOwners;
+
+	// Largest TexelFactor seen for each texture, i.e. its *least* dense usage.
+	//
+	// A texture stretched over a wall somewhere justifies its resolution even if
+	// it is also wasted on a doorknob: the doorknob's UVs are the mistake, not the
+	// asset. So a texture is only oversized when even the usage that spreads it
+	// furthest is still too dense — which makes this the conservative direction.
+	TMap<UTexture2D*, float> BestTexelFactors;
 
 	for (AActor* Actor : Context.Actors)
 	{
@@ -63,6 +86,25 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 					TextureOwners.Add(Texture, Actor);
 				}
 			}
+
+			// The streamer's own view of this component: which textures it uses and
+			// how far each is stretched. Empty unless the level's texture streaming
+			// data has been built, which is why every use of it has a fallback.
+			FStreamingTextureLevelContext LevelContext(EMaterialQualityLevel::High, Component);
+			TArray<FStreamingRenderAssetPrimitiveInfo> StreamingInfos;
+			Component->GetStreamingRenderAssetInfoWithNULLRemoval(LevelContext, StreamingInfos);
+
+			for (const FStreamingRenderAssetPrimitiveInfo& Info : StreamingInfos)
+			{
+				UTexture2D* Texture = Cast<UTexture2D>(Info.RenderAsset);
+				if (!Texture || Info.TexelFactor <= 0.0f)
+				{
+					continue;
+				}
+
+				float& Best = BestTexelFactors.FindOrAdd(Texture, 0.0f);
+				Best = FMath::Max(Best, Info.TexelFactor);
+			}
 		}
 	}
 
@@ -85,17 +127,47 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 			LOCTEXT("TextureSubject", "{0} ({1} x {2})"),
 			FText::FromString(Texture->GetName()), FText::AsNumber(Width), FText::AsNumber(Height));
 
-		if (EffectiveLongestSide > T.OversizedTextureSize)
+		// --- Oversized ---------------------------------------------------------
+		//
+		// Preferred rule: how many texels the texture actually delivers per metre of
+		// surface. Falls back to judging the texture's own dimensions only when the
+		// streaming data needed for the real answer isn't there — and says so, since
+		// the fallback genuinely cannot tell an 8k skybox from an 8k bolt.
+		const float* BestTexelFactor = BestTexelFactors.Find(Texture);
+		const bool bHaveDensity = BestTexelFactor != nullptr && *BestTexelFactor > 0.0f;
+
+		if (bHaveDensity)
+		{
+			const float Density = TexelsPerMetre(EffectiveLongestSide, *BestTexelFactor);
+			if (Density > T.TextureDensityBudget)
+			{
+				const ESeverity Severity = (Texture->VirtualTextureStreaming || bSpecialPurpose)
+					? ESeverity::Minor
+					: (Density > T.TextureDensityBudget * 2 ? ESeverity::Major : ESeverity::Minor);
+
+				FFinding F(TEXT("Texture.Oversized"), Severity, ECategory::Textures,
+					LOCTEXT("OverDenseTextureTitle", "Texture resolution exceeds what the surface shows"), Subject);
+				F.WhyItMatters = FText::Format(
+					LOCTEXT("OverDenseTextureWhy", "Even where it is stretched furthest, this texture delivers about {0} texels per metre of surface against a budget of {1}. Texels nobody can see still cost memory, streaming and build time."),
+					FText::AsNumber(FMath::RoundToInt(Density)), FText::AsNumber(T.TextureDensityBudget));
+				F.HowToFix = LOCTEXT("OverDenseTextureFix", "Halve the source resolution (or set Max Texture Size) — at this density it would look identical.");
+				F.TargetActor = Pair.Value;
+				F.TargetAsset = Texture;
+				Out.Findings.Add(MoveTemp(F));
+			}
+		}
+		else if (EffectiveLongestSide > T.OversizedTextureSize)
 		{
 			const ESeverity Severity = Texture->VirtualTextureStreaming || bSpecialPurpose
 				? ESeverity::Minor : ESeverity::Major;
 			FFinding F(TEXT("Texture.Oversized"), Severity, ECategory::Textures,
 				LOCTEXT("OversizedTextureTitle", "Texture exceeds the configured size limit"), Subject);
 			F.WhyItMatters = FText::Format(
-				LOCTEXT("OversizedTextureWhy", "Its effective longest side is {0}px; large textures increase memory, streaming, and build cost."),
+				LOCTEXT("OversizedTextureWhy", "Its effective longest side is {0}px; large textures increase memory, streaming, and build cost. This level has no texture streaming data, so this judges the texture's own size — it cannot tell a huge surface from a tiny one."),
 				FText::AsNumber(EffectiveLongestSide));
-			F.HowToFix = LOCTEXT("OversizedTextureFix", "Verify texel density, then reduce the source resolution or set Max Texture Size.");
+			F.HowToFix = LOCTEXT("OversizedTextureFix", "Run Build > Build Texture Streaming for a verdict based on how large this texture actually appears; otherwise check texel density by hand before reducing the source resolution.");
 			F.TargetActor = Pair.Value;
+			F.TargetAsset = Texture;
 			Out.Findings.Add(MoveTemp(F));
 		}
 
