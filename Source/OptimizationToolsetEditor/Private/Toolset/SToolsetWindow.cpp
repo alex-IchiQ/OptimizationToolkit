@@ -27,6 +27,7 @@
 #include "Widgets/Input/SSearchBox.h"
 #include "Widgets/Notifications/SProgressBar.h"
 #include "Widgets/Views/STableRow.h"
+#include "Widgets/Views/SExpanderArrow.h"
 
 #define LOCTEXT_NAMESPACE "SToolsetWindow"
 
@@ -474,14 +475,132 @@ TSharedRef<SWidget> SToolsetWindow::BuildAnalyzePanel()
 		.FillHeight(1.0f)
 		.Padding(FMargin(16, 6, 16, 16))
 		[
-			SAssignNew(FindingsListView, SListView<TSharedPtr<FFinding>>)
-			.ListItemsSource(&VisibleFindings)
+			SAssignNew(FindingsTreeView, STreeView<TSharedPtr<FFindingNode>>)
+			.TreeItemsSource(&VisibleTree)
 			.SelectionMode(ESelectionMode::None)
 			.OnGenerateRow(this, &SToolsetWindow::OnGenerateFindingRow)
+			.OnGetChildren(this, &SToolsetWindow::OnGetNodeChildren)
 		];
 }
 
-TSharedRef<ITableRow> SToolsetWindow::OnGenerateFindingRow(TSharedPtr<FFinding> Item, const TSharedRef<STableViewBase>& OwnerTable)
+void SToolsetWindow::BuildCategoryTree(const TArray<TSharedPtr<FFinding>>& Source, TArray<TSharedPtr<FFindingNode>>& OutTree)
+{
+	OutTree.Reset();
+
+	TMap<ECategory, TSharedPtr<FFindingNode>> Groups;
+	for (const TSharedPtr<FFinding>& Finding : Source)
+	{
+		if (!Finding.IsValid())
+		{
+			continue;
+		}
+
+		TSharedPtr<FFindingNode>& Group = Groups.FindOrAdd(Finding->Category);
+		if (!Group.IsValid())
+		{
+			Group = MakeShared<FFindingNode>();
+			Group->Category = Finding->Category;
+		}
+
+		TSharedPtr<FFindingNode> Leaf = MakeShared<FFindingNode>();
+		Leaf->Category = Finding->Category;
+		Leaf->Finding = Finding;
+		Group->Children.Add(Leaf);
+	}
+
+	Groups.GenerateValueArray(OutTree);
+
+	// Fixed category order so groups don't reshuffle between scans; findings keep
+	// the severity order the analyzer already sorted them into.
+	OutTree.Sort([](const TSharedPtr<FFindingNode>& A, const TSharedPtr<FFindingNode>& B)
+	{
+		return static_cast<uint8>(A->Category) < static_cast<uint8>(B->Category);
+	});
+}
+
+void SToolsetWindow::OnGetNodeChildren(TSharedPtr<FFindingNode> Node, TArray<TSharedPtr<FFindingNode>>& OutChildren)
+{
+	if (Node.IsValid())
+	{
+		OutChildren = Node->Children;
+	}
+}
+
+TSharedRef<SWidget> SToolsetWindow::MakeCategoryHeader(TSharedPtr<FFindingNode> Node)
+{
+	// The worst thing in the group decides its colour, so a collapsed group still
+	// says whether it is worth opening.
+	ESeverity Worst = ESeverity::Good;
+	for (const TSharedPtr<FFindingNode>& Child : Node->Children)
+	{
+		if (Child->Finding.IsValid() && static_cast<uint8>(Child->Finding->Severity) < static_cast<uint8>(Worst))
+		{
+			Worst = Child->Finding->Severity;
+		}
+	}
+	const FLinearColor WorstColor = FToolsetStyle::ColorForSeverity(Worst);
+
+	return SNew(SHorizontalBox)
+
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 8, 0))
+		[
+			SNew(SBox).WidthOverride(7).HeightOverride(7)
+			[
+				SNew(SBorder).BorderImage(Brush("Toolset.Fill.Rounded")).BorderBackgroundColor(FSlateColor(WorstColor))
+				[
+					SNullWidget::NullWidget
+				]
+			]
+		]
+
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+		[
+			SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Heading")
+			.Text(FToolsetStyle::LabelForCategory(Node->Category))
+		]
+
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(8, 0, 0, 0))
+		[
+			SNew(SBorder).BorderImage(Brush("Toolset.Pill")).Padding(FMargin(7, 1))
+			[
+				SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle")
+				.Text(FText::AsNumber(Node->Children.Num()))
+			]
+		];
+}
+
+TSharedRef<ITableRow> SToolsetWindow::OnGenerateFindingRow(TSharedPtr<FFindingNode> Node, const TSharedRef<STableViewBase>& OwnerTable)
+{
+	if (Node->IsCategory())
+	{
+		TSharedRef<STableRow<TSharedPtr<FFindingNode>>> Row =
+			SNew(STableRow<TSharedPtr<FFindingNode>>, OwnerTable)
+			.ShowSelection(false)
+			.Padding(FMargin(6, 10, 6, 2));
+
+		Row->SetContent(
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SNew(SExpanderArrow, Row).IndentAmount(0)
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
+			[
+				MakeCategoryHeader(Node)
+			]);
+
+		return Row;
+	}
+
+	return SNew(STableRow<TSharedPtr<FFindingNode>>, OwnerTable)
+		.ShowSelection(false)
+		.Padding(FMargin(6, 5))
+		[
+			MakeFindingCard(Node->Finding)
+		];
+}
+
+TSharedRef<SWidget> SToolsetWindow::MakeFindingCard(TSharedPtr<FFinding> Item)
 {
 	const FLinearColor SevColor = FToolsetStyle::ColorForSeverity(Item->Severity);
 
@@ -506,33 +625,30 @@ TSharedRef<ITableRow> SToolsetWindow::OnGenerateFindingRow(TSharedPtr<FFinding> 
 		]
 	];
 
-	return SNew(STableRow<TSharedPtr<FFinding>>, OwnerTable)
-		.Padding(FMargin(6, 5))
+	return SNew(SBorder)
+		.BorderImage(Brush("Toolset.Card"))
+		.Padding(0)
 		[
-			SNew(SBorder)
-			.BorderImage(Brush("Toolset.Card"))
-			.Padding(0)
+			SNew(SHorizontalBox)
+
+			// Severity colour stripe.
+			+ SHorizontalBox::Slot().AutoWidth()
 			[
-				SNew(SHorizontalBox)
-
-				// Severity colour stripe.
-				+ SHorizontalBox::Slot().AutoWidth()
+				SNew(SBox).WidthOverride(4)
 				[
-					SNew(SBox).WidthOverride(4)
-					[
-						SNew(SBorder).BorderImage(Brush("Toolset.Fill")).BorderBackgroundColor(FSlateColor(SevColor))[ SNullWidget::NullWidget ]
-					]
+					SNew(SBorder).BorderImage(Brush("Toolset.Fill")).BorderBackgroundColor(FSlateColor(SevColor))[ SNullWidget::NullWidget ]
 				]
+			]
 
-				// Body.
-				+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(FMargin(14, 12))
+			// Body.
+			+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(FMargin(14, 12))
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()[ Pills ]
+				+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 8, 0, 0))
 				[
-					SNew(SVerticalBox)
-					+ SVerticalBox::Slot().AutoHeight()[ Pills ]
-					+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 8, 0, 0))
-					[
-						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Heading").Text(Item->Title)
-					]
+					SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Heading").Text(Item->Title)
+				]
 					+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2, 0, 0))
 					[
 						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle").Text(Item->Subject)
@@ -629,40 +745,69 @@ TSharedRef<SWidget> SToolsetWindow::BuildOptimizePanel()
 		.FillHeight(1.0f)
 		.Padding(FMargin(16, 6, 16, 16))
 		[
-			SAssignNew(FixListView, SListView<TSharedPtr<FFinding>>)
-			.ListItemsSource(&FixableFindings)
+			SAssignNew(FixTreeView, STreeView<TSharedPtr<FFindingNode>>)
+			.TreeItemsSource(&FixableTree)
 			.SelectionMode(ESelectionMode::None)
 			.OnGenerateRow(this, &SToolsetWindow::OnGenerateFixRow)
+			.OnGetChildren(this, &SToolsetWindow::OnGetNodeChildren)
 		];
 }
 
-TSharedRef<ITableRow> SToolsetWindow::OnGenerateFixRow(TSharedPtr<FFinding> Item, const TSharedRef<STableViewBase>& OwnerTable)
+TSharedRef<ITableRow> SToolsetWindow::OnGenerateFixRow(TSharedPtr<FFindingNode> Node, const TSharedRef<STableViewBase>& OwnerTable)
+{
+	if (Node->IsCategory())
+	{
+		TSharedRef<STableRow<TSharedPtr<FFindingNode>>> Row =
+			SNew(STableRow<TSharedPtr<FFindingNode>>, OwnerTable)
+			.ShowSelection(false)
+			.Padding(FMargin(6, 10, 6, 2));
+
+		Row->SetContent(
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SNew(SExpanderArrow, Row).IndentAmount(0)
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
+			[
+				MakeCategoryHeader(Node)
+			]);
+
+		return Row;
+	}
+
+	return SNew(STableRow<TSharedPtr<FFindingNode>>, OwnerTable)
+		.ShowSelection(false)
+		.Padding(FMargin(6, 5))
+		[
+			MakeFixCard(Node->Finding)
+		];
+}
+
+TSharedRef<SWidget> SToolsetWindow::MakeFixCard(TSharedPtr<FFinding> Item)
 {
 	const FLinearColor SevColor = FToolsetStyle::ColorForSeverity(Item->Severity);
 	IOptimizationFix* Fix = FToolsetRegistry::Get().FindFix(Item->FixId);
 	const FText FixLabel = Fix ? Fix->GetLabel() : LOCTEXT("FixGeneric", "Fix");
 
-	return SNew(STableRow<TSharedPtr<FFinding>>, OwnerTable)
-		.Padding(FMargin(6, 5))
+	return SNew(SBorder)
+		.BorderImage(Brush("Toolset.Card"))
+		.Padding(0)
 		[
-			SNew(SBorder)
-			.BorderImage(Brush("Toolset.Card"))
-			.Padding(0)
+			SNew(SHorizontalBox)
+
+			// Severity stripe.
+			+ SHorizontalBox::Slot().AutoWidth()
 			[
-				SNew(SHorizontalBox)
-
-				// Severity stripe.
-				+ SHorizontalBox::Slot().AutoWidth()
+				SNew(SBox).WidthOverride(4)
 				[
-					SNew(SBox).WidthOverride(4)
-					[
-						SNew(SBorder).BorderImage(Brush("Toolset.Fill")).BorderBackgroundColor(FSlateColor(SevColor))[ SNullWidget::NullWidget ]
-					]
+					SNew(SBorder).BorderImage(Brush("Toolset.Fill")).BorderBackgroundColor(FSlateColor(SevColor))[ SNullWidget::NullWidget ]
 				]
+			]
 
-				// Body.
-				+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(FMargin(14, 12))
-				[
+			// Body.
+			+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(FMargin(14, 12))
+			[
 					SNew(SVerticalBox)
 					+ SVerticalBox::Slot().AutoHeight()
 					[
@@ -1159,9 +1304,17 @@ void SToolsetWindow::RunScan()
 	}
 
 	RebuildVisibleFindings();
-	if (FixListView.IsValid())
+	BuildCategoryTree(FixableFindings, FixableTree);
+	if (FixTreeView.IsValid())
 	{
-		FixListView->RequestListRefresh();
+		FixTreeView->RequestTreeRefresh();
+
+		// Groups open by default: a collapsed panel after a scan looks like it
+		// found nothing.
+		for (const TSharedPtr<FFindingNode>& Group : FixableTree)
+		{
+			FixTreeView->SetItemExpansion(Group, true);
+		}
 	}
 }
 
@@ -1218,9 +1371,17 @@ void SToolsetWindow::RebuildVisibleFindings()
 			VisibleFindings.Add(F);
 		}
 	}
-	if (FindingsListView.IsValid())
+	BuildCategoryTree(VisibleFindings, VisibleTree);
+	if (FindingsTreeView.IsValid())
 	{
-		FindingsListView->RequestListRefresh();
+		FindingsTreeView->RequestTreeRefresh();
+
+		// Re-expand after every filter change: the tree is rebuilt from scratch,
+		// so previous expansion state refers to nodes that no longer exist.
+		for (const TSharedPtr<FFindingNode>& Group : VisibleTree)
+		{
+			FindingsTreeView->SetItemExpansion(Group, true);
+		}
 	}
 }
 

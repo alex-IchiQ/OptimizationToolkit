@@ -7,7 +7,7 @@
 #include "Toolset/Analyzer/LevelAnalyzer.h"
 #include "Toolset/Cleanup/ProjectSizeReport.h"
 #include "Widgets/SCompoundWidget.h"
-#include "Widgets/Views/SListView.h"
+#include "Widgets/Views/STreeView.h"
 
 class SWidgetSwitcher;
 class SSearchBox;
@@ -23,6 +23,27 @@ enum class EToolsetSection : uint8
 	Cleanup,
 	Reports,
 	Count
+};
+
+/**
+ * One row in the Analyze / Optimize trees: either a category header or a finding
+ * sitting under one.
+ *
+ * With nine passes reporting, a flat list buries a critical mesh problem among
+ * thirty texture notes. Grouping by ECategory means a user can collapse what they
+ * are not working on right now.
+ */
+struct FFindingNode
+{
+	ECategory Category = ECategory::Meshes;
+
+	/** Null on a category header; set on a leaf. */
+	TSharedPtr<FFinding> Finding;
+
+	/** Only populated on a category header. */
+	TArray<TSharedPtr<FFindingNode>> Children;
+
+	bool IsCategory() const { return !Finding.IsValid(); }
 };
 
 /**
@@ -65,16 +86,24 @@ private:
 	FReply OnScanClicked();
 	void RunScan();
 	void RebuildVisibleFindings();
-	TSharedRef<ITableRow> OnGenerateFindingRow(TSharedPtr<FFinding> Item, const TSharedRef<STableViewBase>& OwnerTable);
 	void OnSearchChanged(const FText& NewText);
 	FReply OnToggleSeverityFilter(ESeverity Severity);
 	bool PassesFilter(const FFinding& F) const;
+
+	// ---- Grouped trees ------------------------------------------------------
+	/** Groups findings under category headers, in ECategory order. */
+	static void BuildCategoryTree(const TArray<TSharedPtr<FFinding>>& Source, TArray<TSharedPtr<FFindingNode>>& OutTree);
+	void OnGetNodeChildren(TSharedPtr<FFindingNode> Node, TArray<TSharedPtr<FFindingNode>>& OutChildren);
+	TSharedRef<SWidget> MakeCategoryHeader(TSharedPtr<FFindingNode> Node);
+	TSharedRef<ITableRow> OnGenerateFindingRow(TSharedPtr<FFindingNode> Node, const TSharedRef<STableViewBase>& OwnerTable);
+	TSharedRef<ITableRow> OnGenerateFixRow(TSharedPtr<FFindingNode> Node, const TSharedRef<STableViewBase>& OwnerTable);
+	TSharedRef<SWidget> MakeFindingCard(TSharedPtr<FFinding> Item);
+	TSharedRef<SWidget> MakeFixCard(TSharedPtr<FFinding> Item);
 
 	// ---- Optimize / fixes ---------------------------------------------------
 	bool HasSupportedFix(const FFinding& F) const;
 	void ApplyFix(TSharedPtr<FFinding> Finding);
 	FReply OnApplyAllFixes();
-	TSharedRef<ITableRow> OnGenerateFixRow(TSharedPtr<FFinding> Item, const TSharedRef<STableViewBase>& OwnerTable);
 
 	// ---- Cleanup ------------------------------------------------------------
 	TSharedRef<SWidget> MakeCleanupActionCard(const ICleanupAction& Action);
@@ -98,15 +127,17 @@ private:
 	FScanResult LastScan;
 	bool bHasScanned = false;
 
-	// Analyze list.
+	// Analyze: flat results, plus the same grouped under category headers.
 	TArray<TSharedPtr<FFinding>> AllFindings;
 	TArray<TSharedPtr<FFinding>> VisibleFindings;
-	TSharedPtr<SListView<TSharedPtr<FFinding>>> FindingsListView;
+	TArray<TSharedPtr<FFindingNode>> VisibleTree;
+	TSharedPtr<STreeView<TSharedPtr<FFindingNode>>> FindingsTreeView;
 	TSharedPtr<SSearchBox> SearchBox;
 
-	// Optimize list: findings that have a registered, supported fix.
+	// Optimize: findings that have a registered, supported fix, grouped the same way.
 	TArray<TSharedPtr<FFinding>> FixableFindings;
-	TSharedPtr<SListView<TSharedPtr<FFinding>>> FixListView;
+	TArray<TSharedPtr<FFindingNode>> FixableTree;
+	TSharedPtr<STreeView<TSharedPtr<FFindingNode>>> FixTreeView;
 
 	// Filters.
 	FString SearchFilter;
