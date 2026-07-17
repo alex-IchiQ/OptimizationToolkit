@@ -13,6 +13,7 @@
 #include "Toolset/Analyzer/Passes/BlueprintDependencyPass.h"
 
 #include "Toolset/Optimization/Fixes/EnableNaniteFix.h"
+#include "Toolset/Optimization/Fixes/DisableNaniteFix.h"
 #include "Toolset/Optimization/Fixes/GenerateLODsFix.h"
 #include "Toolset/Optimization/Fixes/SimpleCollisionFix.h"
 #include "Toolset/Optimization/Fixes/ReviewLightMobilityFix.h"
@@ -47,6 +48,7 @@ void FToolsetRegistry::RegisterDefaults()
 	AddPass(MakeUnique<FBlueprintDependencyPass>());
 
 	AddFix(MakeUnique<FEnableNaniteFix>());
+	AddFix(MakeUnique<FDisableNaniteFix>());
 	AddFix(MakeUnique<FGenerateLODsFix>());
 	AddFix(MakeUnique<FSimpleCollisionFix>());
 	AddFix(MakeUnique<FReviewLightMobilityFix>());

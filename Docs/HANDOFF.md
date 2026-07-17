@@ -38,8 +38,10 @@ the fix operations, and every panel is its own widget under `Private/Toolset/Pan
 
 Working:
 - **Dashboard** — a "Level at a glance" card (meshes / polycount / actors /
-  materials / lights, from `FScanResult::Stats`), severity summary cards, and a
-  workflow guide. Each stat carries a delta pill against the previous scan, so a
+  materials / lights, from `FScanResult::Stats`), a loaded-level tree with an
+  include toggle per level, severity summary cards, and a workflow guide.
+  Changing the level scope invalidates stale findings; the next scan ignores
+  every unchecked level. Each stat carries a delta pill against the previous scan, so a
   fix that drops 40k triangles shows its work; the pill is hidden until a second
   scan exists. Every number states its scope in a tooltip — geometry is
   static-mesh LOD0 only, counted per ISM instance — because a user comparing it
@@ -52,7 +54,8 @@ Working:
   that frames the offending actor. A finding in a loaded sub-level carries that
   level's name (`FFinding::LevelName`), stamped centrally by `FLevelAnalyzer`
   rather than by each pass. Passes: `FStaticMeshPass` (excessive triangles,
-  Nanite candidate, missing LODs, per-poly collision, no mesh assigned),
+  Nanite candidates, low-poly meshes with Nanite enabled, missing LODs,
+  per-poly collision, no mesh assigned),
   `FTexturePass` (oversized, non-power-of-two, and missing mipmaps — "oversized"
   means texels-per-metre from the streamer's `TexelFactor`, which accounts for UV
   tiling, and falls back to a plain size threshold *that says so* when the level
@@ -68,7 +71,8 @@ Working:
   feed Normal / Roughness / Metallic / AO, then checks compression and sRGB
   against that role), and `FBlueprintDependencyPass` (walks each Blueprint's hard
   reference chain and reports what it drags in, naming the heaviest assets —
-  the Size Map walk, run automatically across the level). The settings and tick
+  the Size Map walk, run automatically across the level; map packages are hard
+  boundaries and are neither counted nor traversed). The settings and tick
   passes carry no FixId on purpose — both would have to rewrite something shared
   (DefaultEngine.ini, a Blueprint's class defaults) from a panel that only
   scanned one level.
@@ -83,7 +87,7 @@ Working:
 - **Optimize** *(functional)* — the findings that have a supported fix, grouped by
   category the same way, with per-row **Apply** and an **Apply all** button. Every
   fix is transactional (Undo/Redo) and the level auto-re-scans afterward. Fixes:
-  `FEnableNaniteFix`,
+  `FEnableNaniteFix`, `FDisableNaniteFix`,
   `FGenerateLODsFix`, `FSimpleCollisionFix`, `FReviewLightMobilityFix`,
   `FConvertToInstancesFix` (replaces a vetted group of repeated static-mesh
   actors with one HISM actor; reads the group from `FFinding::RelatedActors`),
@@ -165,7 +169,8 @@ differentiator: the fixes.
   "optionally scans **loaded** sub-levels" — nothing can read an unloaded one. So
   the real gaps were smaller: findings never said *which* sub-level an actor was
   in (now `FFinding::LevelName`, stamped centrally in `FLevelAnalyzer`), and
-  there was no way to opt out (now `bIncludeSubLevels`).
+  there was no way to opt out (now the Dashboard level tree; `bIncludeSubLevels`
+  only supplies the default state for newly discovered sub-levels).
 
 **Seen in Perfector's docs and deliberately not queued** (so nobody re-derives
 them): *overlapping UVs* and *too many shadow casters* (both real, both a lot of

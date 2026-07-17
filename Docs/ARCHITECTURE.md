@@ -58,7 +58,8 @@ Private/Toolset/
                        ProjectSettingsPass, BlueprintTickPass,
                        TextureCompressionPass, BlueprintDependencyPass
   Optimization/
-    Fixes/             one file per fix: EnableNaniteFix, GenerateLODsFix,
+    Fixes/             one file per fix: EnableNaniteFix, DisableNaniteFix,
+                       GenerateLODsFix,
                        SimpleCollisionFix, ReviewLightMobilityFix,
                        ConvertToInstancesFix, TextureSettingsFixes (two fixes:
                        normal map compression + data texture sRGB)
@@ -93,7 +94,8 @@ ICleanupAction    GetId / GetTitle / IsDestructive / Execute → project-wide, N
 FToolsetRegistry  GetPasses() / GetFixes() / GetActions() / FindFix(FixId) / RegisterDefaults()
 ```
 
-- `FLevelAnalyzer::AnalyzeCurrentLevel()` walks the world **once** into an
+- `FLevelAnalyzer::AnalyzeCurrentLevel(ExcludedLevelPackages)` walks the world
+  **once**, skips actors belonging to unchecked Dashboard levels, and builds an
   `FLevelScanContext`, gathers `FScanResult::Stats` (the level-scale numbers the
   Dashboard shows — not findings, nobody judges them), runs every registered pass
   against it, sorts, and returns `FScanResult`. Passes never iterate the world themselves — if a new pass needs a
@@ -110,7 +112,7 @@ FToolsetRegistry  GetPasses() / GetFixes() / GetActions() / FindFix(FixId) / Reg
 ## The model (`FToolsetModel`)
 
 One plain object, created by `SToolsetWindow::Construct` and handed to each panel
-as a `TSharedPtr`. It owns the scan result, the derived finding lists, the
+as a `TSharedPtr`. It owns the scan result, per-level scope overrides, the derived finding lists, the
 filters, and the fix operations.
 
 ```
@@ -293,9 +295,10 @@ don't hand-roll a second tree.
 - Tab / toolbar / menu: `OptimizationToolsetEditorModule.cpp`.
 - Section switching: `SToolsetWindow` uses an `SWidgetSwitcher`; `EToolsetSection`
   indexes it, so **the AddSlot order in `BuildContent()` must match the enum**.
-- Scan flow: `FToolsetModel::RunScan()` copies the outgoing `LastScan.Stats` into
+- Scan flow: `FToolsetModel::RunScan()` resolves the Dashboard level toggles to
+  excluded package names, copies the outgoing `LastScan.Stats` into
   `PreviousStats` (the Dashboard's delta baseline — the rescan after a fix is the
-  case that matters), calls `FLevelAnalyzer::AnalyzeCurrentLevel()`, rebuilds
+  case that matters), calls `FLevelAnalyzer::AnalyzeCurrentLevel(Excluded)`, rebuilds
   `AllFindings` + `FixableFindings`, then broadcasts `OnChanged()`.
 - Apply flow: `FToolsetModel::ApplyFix()` / `ApplyAllFixes()` call
   `IOptimizationFix::Apply` then `RunScan()`, so the refresh is the scan's

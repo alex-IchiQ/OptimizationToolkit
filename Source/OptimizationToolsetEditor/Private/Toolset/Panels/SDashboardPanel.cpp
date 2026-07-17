@@ -4,7 +4,14 @@
 #include "Toolset/ToolsetModel.h"
 #include "Toolset/ToolsetWidgetUtils.h"
 
+#include "Editor.h"
+#include "Engine/Level.h"
+#include "Engine/World.h"
+#include "Misc/PackageName.h"
+
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
@@ -73,6 +80,15 @@ void SDashboardPanel::Construct(const FArguments& InArgs)
 					]
 				]
 			]
+
+			// Loaded-level scope: the user can exclude noisy or irrelevant sub-levels
+			// before running the next scan.
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(FMargin(6, 14, 6, 0))
+			[
+				BuildLevelScopeCard()
+			]
 		]
 	];
 }
@@ -80,6 +96,190 @@ void SDashboardPanel::Construct(const FArguments& InArgs)
 // ---------------------------------------------------------------------------
 // Level stats
 // ---------------------------------------------------------------------------
+void SDashboardPanel::RefreshLevelTree()
+{
+	LevelRoots.Reset();
+
+	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+	if (!World || !World->PersistentLevel)
+	{
+		if (LevelTree.IsValid())
+		{
+			LevelTree->RequestTreeRefresh();
+		}
+		return;
+	}
+
+	auto MakeItem = [World](ULevel* Level)
+	{
+		TSharedPtr<FDashboardLevelItem> Item = MakeShared<FDashboardLevelItem>();
+		Item->PackageName = Level->GetOutermost()->GetFName();
+		Item->Label = FText::FromString(FPackageName::GetShortName(Item->PackageName.ToString()));
+		Item->bPersistentLevel = Level == World->PersistentLevel;
+		for (AActor* Actor : Level->Actors)
+		{
+			if (Actor)
+			{
+				++Item->ActorCount;
+			}
+		}
+		return Item;
+	};
+
+	TSharedPtr<FDashboardLevelItem> Root = MakeItem(World->PersistentLevel);
+	for (ULevel* Level : World->GetLevels())
+	{
+		if (Level && Level != World->PersistentLevel)
+		{
+			Root->Children.Add(MakeItem(Level));
+		}
+	}
+	Root->Children.Sort([](const TSharedPtr<FDashboardLevelItem>& A, const TSharedPtr<FDashboardLevelItem>& B)
+	{
+		return A.IsValid() && B.IsValid() && A->Label.CompareTo(B->Label) < 0;
+	});
+	LevelRoots.Add(Root);
+
+	if (LevelTree.IsValid())
+	{
+		LevelTree->RequestTreeRefresh();
+		LevelTree->SetItemExpansion(Root, true);
+	}
+}
+
+FReply SDashboardPanel::OnRefreshLevelsClicked()
+{
+	RefreshLevelTree();
+	return FReply::Handled();
+}
+
+void SDashboardPanel::GetLevelChildren(
+	TSharedPtr<FDashboardLevelItem> Item,
+	TArray<TSharedPtr<FDashboardLevelItem>>& OutChildren) const
+{
+	if (Item.IsValid())
+	{
+		OutChildren.Append(Item->Children);
+	}
+}
+
+TSharedRef<ITableRow> SDashboardPanel::GenerateLevelRow(
+	TSharedPtr<FDashboardLevelItem> Item,
+	const TSharedRef<STableViewBase>& OwnerTable)
+{
+	return SNew(STableRow<TSharedPtr<FDashboardLevelItem>>, OwnerTable)
+		.Padding(FMargin(4, 3))
+		[
+			SNew(SHorizontalBox)
+
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(FMargin(0, 0, 10, 0))
+			[
+				SNew(SCheckBox)
+				.IsChecked_Lambda([this, Item]()
+				{
+					return Model.IsValid() && Item.IsValid()
+						&& Model->IsLevelIncluded(Item->PackageName, Item->bPersistentLevel)
+						? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+				})
+				.OnCheckStateChanged_Lambda([this, Item](ECheckBoxState State)
+				{
+					if (Model.IsValid() && Item.IsValid())
+					{
+						Model->SetLevelIncluded(Item->PackageName, State == ECheckBoxState::Checked);
+					}
+				})
+			]
+
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.0f)
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.TextStyle(&S(), "Toolset.Text.Body")
+				.Text(Item.IsValid() ? Item->Label : FText::GetEmpty())
+			]
+
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(FMargin(10, 0, 0, 0))
+			[
+				SNew(STextBlock)
+				.TextStyle(&S(), "Toolset.Text.Subtle")
+				.Text(Item.IsValid()
+					? FText::Format(LOCTEXT("LevelActorCount", "{0} actors"), FText::AsNumber(Item->ActorCount))
+					: FText::GetEmpty())
+			]
+		];
+}
+
+TSharedRef<SWidget> SDashboardPanel::BuildLevelScopeCard()
+{
+	RefreshLevelTree();
+
+	TSharedRef<SBorder> Card = SNew(SBorder)
+		.BorderImage(Brush("Toolset.Card"))
+		.Padding(FMargin(18, 14))
+		[
+			SNew(SVerticalBox)
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight()
+					[
+						SNew(STextBlock)
+						.TextStyle(&S(), "Toolset.Text.Heading")
+						.Text(LOCTEXT("LevelScopeTitle", "Level scan scope"))
+					]
+					+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 3, 0, 0))
+					[
+						SNew(STextBlock)
+						.TextStyle(&S(), "Toolset.Text.Subtle")
+						.Text(LOCTEXT("LevelScopeHint", "Changing scope clears stale results; unchecked levels are skipped by the next scan."))
+					]
+				]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				[
+					SNew(SButton)
+					.ButtonStyle(&S(), "Toolset.Button.Ghost")
+					.OnClicked(this, &SDashboardPanel::OnRefreshLevelsClicked)
+					[
+						SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Body").Text(LOCTEXT("RefreshLevels", "Refresh"))
+					]
+				]
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(FMargin(0, 10, 0, 0))
+			[
+				SNew(SBox)
+				.HeightOverride(180.0f)
+				[
+					SAssignNew(LevelTree, STreeView<TSharedPtr<FDashboardLevelItem>>)
+					.TreeItemsSource(&LevelRoots)
+					.SelectionMode(ESelectionMode::None)
+					.OnGenerateRow(this, &SDashboardPanel::GenerateLevelRow)
+					.OnGetChildren(this, &SDashboardPanel::GetLevelChildren)
+				]
+			]
+		];
+
+	if (LevelTree.IsValid() && !LevelRoots.IsEmpty())
+	{
+		LevelTree->SetItemExpansion(LevelRoots[0], true);
+	}
+	return Card;
+}
+
 FText SDashboardPanel::LabelForLevelStat(ELevelStat Stat)
 {
 	switch (Stat)

@@ -97,6 +97,22 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 			F.FixId = TEXT("Fix_EnableNanite");
 			Out.Findings.Add(MoveTemp(F));
 		}
+
+		// --- Nanite overhead on tiny geometry can outweigh the work it removes.
+		// This stays a Minor review item: very high instance counts or a deliberate
+		// all-Nanite content pipeline can still make the setting reasonable.
+		if (bNanite && T.NaniteMinimumTriangles > 0 && NumTris <= T.NaniteMinimumTriangles)
+		{
+			FFinding F(TEXT("Mesh.LowPolyNanite"), ESeverity::Minor, ECategory::Meshes,
+				LOCTEXT("LowPolyNaniteTitle", "Nanite enabled on a low-poly mesh"), Subject);
+			F.WhyItMatters = FText::Format(
+				LOCTEXT("LowPolyNaniteWhy", "This mesh has only {0} triangles, so Nanite's cluster data, build time, and streaming overhead may outweigh its geometry savings."),
+				FText::AsNumber(NumTris));
+			F.HowToFix = LOCTEXT("LowPolyNaniteFix", "Disable Nanite unless high instance counts or a deliberate Nanite-only pipeline justify keeping it enabled.");
+			F.TargetActor = Actor;
+			F.FixId = TEXT("Fix_DisableNanite");
+			Out.Findings.Add(MoveTemp(F));
+		}
 #endif
 
 		// --- Missing LODs on a non-Nanite mesh: no distance falloff at all.

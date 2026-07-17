@@ -1,47 +1,47 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
-#include "Toolset/Optimization/Fixes/EnableNaniteFix.h"
+#include "Toolset/Optimization/Fixes/DisableNaniteFix.h"
 #include "Toolset/Optimization/Fixes/FixUtils.h"
 #include "Toolset/ToolsetCompat.h"
 
 #include "Engine/StaticMesh.h"
 #include "ScopedTransaction.h"
 
-#define LOCTEXT_NAMESPACE "EnableNaniteFix"
+#define LOCTEXT_NAMESPACE "DisableNaniteFix"
 
-FText FEnableNaniteFix::GetLabel() const
+FText FDisableNaniteFix::GetLabel() const
 {
-	return LOCTEXT("EnableNaniteLabel", "Enable Nanite");
+	return LOCTEXT("DisableNaniteLabel", "Disable Nanite");
 }
 
-bool FEnableNaniteFix::IsSupported() const
+bool FDisableNaniteFix::IsSupported() const
 {
 #if OPTIMIZATION_HAS_NANITE
 	return true;
 #else
-	return false;	// pre-5.0 engines have no Nanite
+	return false;
 #endif
 }
 
-bool FEnableNaniteFix::Apply(const FFinding& Finding) const
+bool FDisableNaniteFix::Apply(const FFinding& Finding) const
 {
 #if OPTIMIZATION_HAS_NANITE
 	UStaticMesh* Mesh = MeshFromFinding(Finding);
-	if (!Mesh || Mesh->IsNaniteEnabled())
+	if (!Mesh || !Mesh->IsNaniteEnabled())
 	{
 		return false;
 	}
 
-	const FScopedTransaction Transaction(LOCTEXT("EnableNaniteTx", "Enable Nanite"));
+	const FScopedTransaction Transaction(LOCTEXT("DisableNaniteTx", "Disable Nanite"));
 	Mesh->Modify();
 #if OPTIMIZATION_UE_VERSION_AT_LEAST(5, 7)
 	FMeshNaniteSettings Settings = Mesh->GetNaniteSettings();
-	Settings.bEnabled = true;
+	Settings.bEnabled = false;
 	Mesh->SetNaniteSettings(Settings);
 #else
-	Mesh->NaniteSettings.bEnabled = true;
+	Mesh->NaniteSettings.bEnabled = false;
 #endif
-	Mesh->PostEditChange();		// rebuilds the mesh with Nanite data
+	Mesh->PostEditChange();
 	Mesh->MarkPackageDirty();
 	return true;
 #else

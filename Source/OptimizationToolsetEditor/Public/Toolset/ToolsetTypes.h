@@ -146,6 +146,7 @@ struct FLevelStats
  *  a settings panel can override them later. */
 struct FAnalyzeThresholds
 {
+	int32 NaniteMinimumTriangles = 2000;	// enabled Nanite at or below this count deserves review
 	int32 NaniteCandidateTriangles = 20000;	// tris above which Nanite is worth it
 	int32 ExcessiveTriangles = 500000;		// single mesh that is simply too heavy
 	int32 OversizedTextureSize = 4096;		// px on longest side (fallback rule)

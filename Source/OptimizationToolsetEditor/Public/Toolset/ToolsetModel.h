@@ -43,6 +43,13 @@ public:
 	bool HasPreviousStats() const { return bHasPreviousStats; }
 	const FLevelStats& GetPreviousStats() const { return PreviousStats; }
 
+	// ---- Level scope ---------------------------------------------------------
+	/** Whether this loaded level participates in the next scan. */
+	bool IsLevelIncluded(FName PackageName, bool bPersistentLevel) const;
+
+	/** Overrides the project default for one level for the lifetime of this window. */
+	void SetLevelIncluded(FName PackageName, bool bIncluded);
+
 	// ---- Findings -----------------------------------------------------------
 	/** Every finding of the last scan, shared so views can hold a row cheaply. */
 	const TArray<TSharedPtr<FFinding>>& GetAllFindings() const { return AllFindings; }
@@ -87,6 +94,9 @@ private:
 	/** Rebuilds AllFindings/FixableFindings from LastScan and broadcasts. */
 	void RebuildDerivedLists();
 
+	/** Resolves the per-level toggles into the package names the analyzer skips. */
+	TSet<FName> BuildExcludedLevelPackages() const;
+
 	FScanResult LastScan;
 	bool bHasScanned = false;
 
@@ -99,6 +109,9 @@ private:
 	FString SearchFilter;
 	TSet<ESeverity> EnabledSeverities = { ESeverity::Critical, ESeverity::Major, ESeverity::Minor };
 	TOptional<ECategory> CategoryFilter;
+
+	/** Session-only choices keyed by level package; absent means use project default. */
+	TMap<FName, bool> LevelInclusionOverrides;
 
 	FSimpleMulticastDelegate ChangedEvent;
 };

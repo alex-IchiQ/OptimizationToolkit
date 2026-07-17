@@ -8,6 +8,7 @@
 #include "AssetRegistry/IAssetRegistry.h"
 #include "GameFramework/Actor.h"
 #include "Modules/ModuleManager.h"
+#include "UObject/Package.h"
 
 #define LOCTEXT_NAMESPACE "BlueprintDependencyPass"
 
@@ -28,13 +29,32 @@ namespace
 		TArray<FChainEntry> Entries;	// sorted heaviest first once gathered
 	};
 
-	bool IsWalkableDependency(FName PackageName)
+	bool IsWalkableDependency(IAssetRegistry& AssetRegistry, FName PackageName)
 	{
 		const FString Path = PackageName.ToString();
 
 		// /Script packages are code, not content: they carry no disk size and
 		// walking them just drags the whole module graph in for nothing.
-		return !Path.StartsWith(TEXT("/Script/"));
+		if (Path.StartsWith(TEXT("/Script/")))
+		{
+			return false;
+		}
+
+		// A hard World reference should not turn a Blueprint check into a level
+		// size report. Stop at map packages entirely: omitting only the .umap's own
+		// bytes while still walking its dependencies would still charge the
+		// Blueprint for nearly every asset placed in that level.
+		TArray<FAssetData> AssetsInPackage;
+		AssetRegistry.GetAssetsByPackageName(PackageName, AssetsInPackage);
+		for (const FAssetData& Asset : AssetsInPackage)
+		{
+			if ((Asset.PackageFlags & PKG_ContainsMap) != 0)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	int64 GetDiskSize(IAssetManagerEditorModule& EditorModule, IAssetRegistry& AssetRegistry, FName PackageName)
@@ -98,9 +118,16 @@ namespace
 
 			for (const FName Dependency : Dependencies)
 			{
-				if (IsWalkableDependency(Dependency) && !Visited.Contains(Dependency))
+				if (Visited.Contains(Dependency))
 				{
-					Visited.Add(Dependency);
+					continue;
+				}
+
+				// Mark rejected packages as visited too, so a level referenced through
+				// several branches is classified only once.
+				Visited.Add(Dependency);
+				if (IsWalkableDependency(AssetRegistry, Dependency))
+				{
 					Pending.Add(Dependency);
 				}
 			}

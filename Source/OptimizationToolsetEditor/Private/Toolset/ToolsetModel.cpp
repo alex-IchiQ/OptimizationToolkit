@@ -1,8 +1,13 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "Toolset/ToolsetModel.h"
+#include "Toolset/OptimizationToolsetSettings.h"
 #include "Toolset/ToolsetRegistry.h"
 #include "Toolset/Analyzer/LevelAnalyzer.h"
+
+#include "Editor.h"
+#include "Engine/Level.h"
+#include "Engine/World.h"
 
 void FToolsetModel::RunScan()
 {
@@ -15,10 +20,75 @@ void FToolsetModel::RunScan()
 		bHasPreviousStats = true;
 	}
 
-	LastScan = FLevelAnalyzer::AnalyzeCurrentLevel();
+	LastScan = FLevelAnalyzer::AnalyzeCurrentLevel(BuildExcludedLevelPackages());
 	bHasScanned = true;
 
 	RebuildDerivedLists();
+}
+
+bool FToolsetModel::IsLevelIncluded(FName PackageName, bool bPersistentLevel) const
+{
+	if (const bool* Override = LevelInclusionOverrides.Find(PackageName))
+	{
+		return *Override;
+	}
+
+	// The persistent level is always included by default. The old project setting
+	// now controls only the initial state of sub-level toggles; the Dashboard can
+	// override either choice without mutating project configuration.
+	if (bPersistentLevel)
+	{
+		return true;
+	}
+
+	const UOptimizationToolsetSettings* Settings = GetDefault<UOptimizationToolsetSettings>();
+	return !Settings || Settings->bIncludeSubLevels;
+}
+
+void FToolsetModel::SetLevelIncluded(FName PackageName, bool bIncluded)
+{
+	if (IsLevelIncluded(PackageName, /*bPersistentLevel*/ false) == bIncluded
+		&& LevelInclusionOverrides.Contains(PackageName))
+	{
+		return;
+	}
+
+	LevelInclusionOverrides.Add(PackageName, bIncluded);
+
+	// Findings from the previous scope are now stale. In particular, leaving
+	// them fixable would let Optimize mutate an actor in a level the user just
+	// excluded. Clear the result and require one explicit scan of the new scope.
+	LastScan = FScanResult();
+	bHasScanned = false;
+	bHasPreviousStats = false;
+	AllFindings.Reset();
+	FixableFindings.Reset();
+	ChangedEvent.Broadcast();
+}
+
+TSet<FName> FToolsetModel::BuildExcludedLevelPackages() const
+{
+	TSet<FName> Excluded;
+	const UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+	if (!World)
+	{
+		return Excluded;
+	}
+
+	for (const ULevel* Level : World->GetLevels())
+	{
+		if (!Level)
+		{
+			continue;
+		}
+
+		const FName PackageName = Level->GetOutermost()->GetFName();
+		if (!IsLevelIncluded(PackageName, Level == World->PersistentLevel))
+		{
+			Excluded.Add(PackageName);
+		}
+	}
+	return Excluded;
 }
 
 void FToolsetModel::RebuildDerivedLists()

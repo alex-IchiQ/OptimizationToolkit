@@ -17,16 +17,24 @@ public:
 	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
 
 	/**
-	 * Scan the loaded sub-levels as well as the persistent one.
+	 * Include newly discovered loaded sub-levels in the Dashboard scan scope.
 	 *
 	 * On by default: a streamed map's problems are in its sub-levels, and a scan
 	 * that quietly ignored them would report a clean bill of health for a level
 	 * that never had any actors of its own. Turn it off to review one level at a
-	 * time. Unloaded sub-levels are never scanned — nothing can read them without
-	 * loading them first.
+	 * time. Each level can then be included or excluded from the Dashboard without
+	 * changing this project default. Unloaded sub-levels are never scanned.
 	 */
 	UPROPERTY(EditAnywhere, Config, Category="Scan")
 	bool bIncludeSubLevels = true;
+
+	/**
+	 * Triangle count at or below which an enabled Nanite mesh is suggested for review.
+	 * Set to zero to disable this check. Kept deliberately low because Nanite may
+	 * still be worthwhile for heavily instanced assets.
+	 */
+	UPROPERTY(EditAnywhere, Config, Category="Meshes", meta=(ClampMin="0", ClampMax="1000000", UIMin="0", UIMax="20000", DisplayName="Nanite Low-Poly Threshold"))
+	int32 NaniteMinimumTriangles = 2000;
 
 	/** Triangle count above which a non-Nanite static mesh is suggested for Nanite. */
 	UPROPERTY(EditAnywhere, Config, Category="Meshes", meta=(ClampMin="1000", ClampMax="10000000", UIMin="1000", UIMax="1000000"))

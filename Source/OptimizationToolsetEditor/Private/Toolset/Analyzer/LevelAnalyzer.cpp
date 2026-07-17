@@ -87,7 +87,7 @@ namespace
 	}
 }
 
-FScanResult FLevelAnalyzer::AnalyzeCurrentLevel()
+FScanResult FLevelAnalyzer::AnalyzeCurrentLevel(const TSet<FName>& ExcludedLevelPackages)
 {
 	FScanResult Result;
 
@@ -99,11 +99,11 @@ FScanResult FLevelAnalyzer::AnalyzeCurrentLevel()
 
 	const double StartTime = FPlatformTime::Seconds();
 	FAnalyzeThresholds Thresholds;
-	bool bIncludeSubLevels = true;
 	if (const UOptimizationToolsetSettings* Settings = GetDefault<UOptimizationToolsetSettings>())
 	{
-		bIncludeSubLevels = Settings->bIncludeSubLevels;
 		Thresholds.NaniteCandidateTriangles = FMath::Max(1, Settings->NaniteCandidateTriangles);
+		Thresholds.NaniteMinimumTriangles = FMath::Clamp(
+			Settings->NaniteMinimumTriangles, 0, FMath::Max(0, Thresholds.NaniteCandidateTriangles - 1));
 		Thresholds.ExcessiveTriangles = FMath::Max(Thresholds.NaniteCandidateTriangles, Settings->ExcessiveTriangles);
 		Thresholds.OversizedTextureSize = FMath::Max(1, Settings->OversizedTextureSize);
 		Thresholds.TextureDensityBudget = FMath::Max(128, Settings->TextureDensityBudget);
@@ -128,7 +128,8 @@ FScanResult FLevelAnalyzer::AnalyzeCurrentLevel()
 	{
 		AActor* Actor = *It;
 
-		if (!bIncludeSubLevels && Actor->GetLevel() != World->PersistentLevel)
+		const ULevel* ActorLevel = Actor->GetLevel();
+		if (ActorLevel && ExcludedLevelPackages.Contains(ActorLevel->GetOutermost()->GetFName()))
 		{
 			continue;
 		}

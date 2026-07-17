@@ -5,8 +5,19 @@
 #include "CoreMinimal.h"
 #include "Toolset/ToolsetTypes.h"
 #include "Widgets/SCompoundWidget.h"
+#include "Widgets/Views/STreeView.h"
 
 class FToolsetModel;
+
+/** One loaded level in the Dashboard scan-scope tree. */
+struct FDashboardLevelItem
+{
+	FName PackageName;
+	FText Label;
+	int32 ActorCount = 0;
+	bool bPersistentLevel = false;
+	TArray<TSharedPtr<FDashboardLevelItem>> Children;
+};
 
 /**
  * The level-scale numbers on the Dashboard, in display order.
@@ -43,8 +54,14 @@ public:
 
 private:
 	TSharedRef<SWidget> BuildLevelStatsCard();
+	TSharedRef<SWidget> BuildLevelScopeCard();
 	TSharedRef<SWidget> MakeLevelStatCell(ELevelStat Stat);
 	TSharedRef<SWidget> MakeSeverityStatCard(ESeverity Severity);
+
+	void RefreshLevelTree();
+	FReply OnRefreshLevelsClicked();
+	TSharedRef<ITableRow> GenerateLevelRow(TSharedPtr<FDashboardLevelItem> Item, const TSharedRef<STableViewBase>& OwnerTable);
+	void GetLevelChildren(TSharedPtr<FDashboardLevelItem> Item, TArray<TSharedPtr<FDashboardLevelItem>>& OutChildren) const;
 
 	static FText LabelForLevelStat(ELevelStat Stat);
 	static FText TooltipForLevelStat(ELevelStat Stat);
@@ -55,4 +72,6 @@ private:
 	FLinearColor DeltaColorForLevelStat(ELevelStat Stat) const;
 
 	TSharedPtr<FToolsetModel> Model;
+	TArray<TSharedPtr<FDashboardLevelItem>> LevelRoots;
+	TSharedPtr<STreeView<TSharedPtr<FDashboardLevelItem>>> LevelTree;
 };
