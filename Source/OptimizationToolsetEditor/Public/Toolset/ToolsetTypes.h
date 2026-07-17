@@ -111,6 +111,7 @@ struct FAnalyzeThresholds
 	int32 MaterialSlotBudget = 8;			// mesh sections/material slots before review
 	int32 MovableLightBudget = 24;			// dynamic lights per level before we warn
 	int32 InstancingCandidateCount = 10;	// compatible repeated actors worth batching
+	int32 DependencyChainSizeMB = 64;		// disk a Blueprint may drag in before we warn
 };
 
 /** Aggregate result of a full analyze pass. */

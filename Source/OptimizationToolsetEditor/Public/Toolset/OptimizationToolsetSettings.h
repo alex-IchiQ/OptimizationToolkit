@@ -39,4 +39,8 @@ public:
 	/** Minimum compatible repeated actors required for an ISM/HISM recommendation. */
 	UPROPERTY(EditAnywhere, Config, Category="Instancing", meta=(ClampMin="2", ClampMax="10000", UIMin="2", UIMax="100"))
 	int32 InstancingCandidateCount = 10;
+
+	/** Disk size a Blueprint's hard-reference chain may reach before it is flagged. */
+	UPROPERTY(EditAnywhere, Config, Category="Blueprints", meta=(ClampMin="1", ClampMax="100000", UIMin="8", UIMax="1024", DisplayName="Dependency Chain Size (MB)"))
+	int32 DependencyChainSizeMB = 64;
 };

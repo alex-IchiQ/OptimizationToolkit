@@ -42,10 +42,23 @@ Working:
   `FLightingPass` (too many movable lights), `FInstancingCandidatePass`
   (conservative groups of compatible repeated static-mesh actors),
   `FProjectSettingsPass` (rendering settings that cost everywhere; ignores the
-  level), and `FBlueprintTickPass` (static Blueprint actors ticking every frame,
-  reported per class). The last two carry no FixId on purpose — both would have
-  to rewrite something shared (DefaultEngine.ini, a Blueprint's class defaults)
-  from a panel that only scanned one level.
+  level), `FBlueprintTickPass` (static Blueprint actors ticking every frame,
+  reported per class), `FTextureCompressionPass` (asks materials which textures
+  feed Normal / Roughness / Metallic / AO, then checks compression and sRGB
+  against that role), and `FBlueprintDependencyPass` (walks each Blueprint's hard
+  reference chain and reports what it drags in, naming the heaviest assets —
+  the Size Map walk, run automatically across the level). The settings and tick
+  passes carry no FixId on purpose — both would have to rewrite something shared
+  (DefaultEngine.ini, a Blueprint's class defaults) from a panel that only
+  scanned one level.
+
+  `FBlueprintDependencyPass` needs the `AssetManagerEditor` plugin (declared in
+  the .uplugin; it is `EnabledByDefault` in the engine). Sizes come from
+  `IAssetManagerEditorModule::GetIntegerValueForCustomColumn(DiskSizeName)`, which
+  reads the current registry source — the editor's own registry by default. For
+  real shipped numbers the source has to be pointed at a cooked
+  DevelopmentAssetRegistry via `SetCurrentRegistrySource`; that selector is what
+  a "Final Packaging" size mode would be built on.
 - **Optimize** *(functional)* — lists findings that have a supported fix, with
   per-row **Apply** and an **Apply all** button; every fix is transactional
   (Undo/Redo) and the level auto-re-scans afterward. Fixes: `FEnableNaniteFix`,

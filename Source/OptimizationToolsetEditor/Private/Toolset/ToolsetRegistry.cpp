@@ -10,6 +10,7 @@
 #include "Toolset/Analyzer/Passes/ProjectSettingsPass.h"
 #include "Toolset/Analyzer/Passes/BlueprintTickPass.h"
 #include "Toolset/Analyzer/Passes/TextureCompressionPass.h"
+#include "Toolset/Analyzer/Passes/BlueprintDependencyPass.h"
 
 #include "Toolset/Optimization/Fixes/EnableNaniteFix.h"
 #include "Toolset/Optimization/Fixes/GenerateLODsFix.h"
@@ -43,6 +44,7 @@ void FToolsetRegistry::RegisterDefaults()
 	AddPass(MakeUnique<FProjectSettingsPass>());
 	AddPass(MakeUnique<FBlueprintTickPass>());
 	AddPass(MakeUnique<FTextureCompressionPass>());
+	AddPass(MakeUnique<FBlueprintDependencyPass>());
 
 	AddFix(MakeUnique<FEnableNaniteFix>());
 	AddFix(MakeUnique<FGenerateLODsFix>());

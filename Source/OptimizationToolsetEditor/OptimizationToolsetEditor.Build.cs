@@ -34,6 +34,7 @@ public class OptimizationToolsetEditor : ModuleRules
 			"AssetRegistry",
 			"AssetTools",
 			"EngineSettings",
+			"AssetManagerEditor",
 		});
 	}
 }

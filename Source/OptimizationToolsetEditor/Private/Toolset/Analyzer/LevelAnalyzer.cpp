@@ -31,6 +31,7 @@ FScanResult FLevelAnalyzer::AnalyzeCurrentLevel()
 		Thresholds.MaterialSlotBudget = FMath::Max(1, Settings->MaterialSlotBudget);
 		Thresholds.MovableLightBudget = FMath::Max(0, Settings->MovableLightBudget);
 		Thresholds.InstancingCandidateCount = FMath::Max(2, Settings->InstancingCandidateCount);
+		Thresholds.DependencyChainSizeMB = FMath::Max(1, Settings->DependencyChainSizeMB);
 	}
 	// Walk the world once and bucket the types passes ask for, instead of every
 	// pass running its own TActorIterator over the whole level.
