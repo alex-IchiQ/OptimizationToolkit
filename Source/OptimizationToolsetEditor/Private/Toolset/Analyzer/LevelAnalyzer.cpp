@@ -25,8 +25,7 @@ FScanResult FLevelAnalyzer::AnalyzeCurrentLevel()
 	if (const UOptimizationToolsetSettings* Settings = GetDefault<UOptimizationToolsetSettings>())
 	{
 		Thresholds.NaniteCandidateTriangles = FMath::Max(1, Settings->NaniteCandidateTriangles);
-		Thresholds.ExcessiveTriangles = FMath::Max(
-			Thresholds.NaniteCandidateTriangles, Settings->ExcessiveTriangles);
+		Thresholds.ExcessiveTriangles = FMath::Max(Thresholds.NaniteCandidateTriangles, Settings->ExcessiveTriangles);
 		Thresholds.OversizedTextureSize = FMath::Max(1, Settings->OversizedTextureSize);
 		Thresholds.MaterialSlotBudget = FMath::Max(1, Settings->MaterialSlotBudget);
 		Thresholds.MovableLightBudget = FMath::Max(0, Settings->MovableLightBudget);

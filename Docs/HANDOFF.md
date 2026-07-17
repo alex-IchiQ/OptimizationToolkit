@@ -72,13 +72,16 @@ Working:
 - **Settings** *(functional)* — project-wide analyze thresholds under
   **Project Settings → Plugins → Optimization Toolset**.
 
-- **Cleanup** *(functional)* — a **project size** card (on-demand `FProjectSizeReport`:
-  measures every package under /Game on disk, grouped by asset class, top 10 with
-  bars plus a rolled-up tail), then registry-driven project-wide actions, each a
-  card with a Run button and a last-run summary. Destructive ones are tagged
-  "NOT UNDOABLE" and confirm first, unless they run a better review themselves
-  (`NeedsConfirmation()`). Actions: `FSaveDirtyPackagesAction`,
-  `FFixUpRedirectorsAction`, `FDeleteUnusedAssetsAction`.
+- **Cleanup** *(functional)* — a **project size** card (on-demand
+  `FProjectSizeReport`: measures every package under /Game on disk, buckets raw
+  asset classes into `EAssetCategory` — textures, static/skeletal meshes,
+  materials, animations, audio, blueprints, levels, other — and draws them as one
+  stacked bar plus a legend, so the whole footprint is on screen with nothing
+  truncated). Then registry-driven project-wide actions, each a card with a Run
+  button and a last-run summary. Destructive ones are tagged "NOT UNDOABLE" and
+  confirm first, unless they run a better review themselves (`NeedsConfirmation()`).
+  Actions: `FSaveDirtyPackagesAction`, `FFixUpRedirectorsAction`,
+  `FDeleteUnusedAssetsAction`.
 
 Placeholder panels (structured, list planned actions, not yet implemented):
 - **Reports** — CSV/JSON export, before/after snapshots.
@@ -87,16 +90,57 @@ Placeholder panels (structured, list planned actions, not yet implemented):
 
 Ordered by suggested priority:
 
-1. **Preview before apply** — currently Apply is a leap of faith. Worth a shared
+1. **Reports panel** — the last placeholder. CSV/JSON export of `FScanResult`,
+   before/after snapshots. `FFinding::TypeId` is the stable column to group and
+   diff on. Deferred deliberately until the other features landed.
+2. **Preview before apply** — Apply is currently a leap of faith. Worth a shared
    list-with-checkboxes widget so a user can untick individual actors/assets
    before ISM conversion or a delete. Also: `Fix_ConvertToInstances` is
-   structural and currently runs under "Apply all" like any other fix; consider
-   flagging structural fixes so bulk apply doesn't restructure a level silently.
-2. **More analyze passes** — shader instruction counts (version/platform-aware).
-4. **Reports panel** — CSV/JSON export of `FScanResult`, before/after snapshots.
-   `FFinding::TypeId` is the stable column to group and diff on.
-5. **Ship prep** — `Resources/Icon128.png` is missing (plugin browser + FAB), and
+   structural and runs under "Apply all" like any other fix; consider flagging
+   structural fixes so bulk apply can't restructure a level silently.
+3. **Delete unused, remaining polish** (ideas confirmed against the shipped
+   Assets Cleaner plugin): delete now-empty folders afterwards; an "open in
+   Reference Viewer / Size Map" row action so a user can verify *why* something
+   looks unused before deleting; a warning when the list is enormous.
+4. **"Final Packaging" size mode** — `IAssetManagerEditorModule::GetAvailableRegistrySources()`
+   / `SetCurrentRegistrySource()` switch the size columns between the editor's
+   registry and a cooked platform registry. That selector is all HXS's "Final
+   Packaging" dropdown is. Only useful to someone who has actually cooked.
+5. **PSO precaching audit** — a few more checks in `FProjectSettingsPass`. Note
+   UE 5.2+ precaches automatically, so building a bundled `.spc` cache (HXS's
+   "Stutter Killer") would be chasing a solved problem; auditing the settings is
+   the part still worth doing.
+6. **More analyze passes** — shader instruction counts (version/platform-aware).
+7. **Ship prep** — `Resources/Icon128.png` is missing (plugin browser + FAB), and
    `.uplugin` has empty `CreatedBy` / `DocsURL` / `SupportURL`.
+
+## Working agreements
+
+- **Commits are authored by the repo owner**, with no AI co-author trailer. Work
+  happens directly on `main`; don't spin up branches unless asked.
+- **The engine is on disk** at `E:\EpicGames\UE_5.7` (5.8 is installed too).
+  Grep its headers to verify an API *before* writing against it — this has caught
+  a never-firing check, two wrong classes and a private member so far. It is much
+  cheaper than a build round-trip.
+
+## Reference material (ideas only — do not copy code)
+
+Competitor plugins sit on disk for study. The owner holds a commercial licence
+for Assets Cleaner, so reading is fine; **shipping any of their code inside a
+plugin we sell on the same store is not**, licence or no licence. Learn the
+approach and the APIs, write our own.
+
+- `E:\Projects\Pal\` — Palatial's six plugins (moved out of `Plugins/`, they
+  don't compile on 5.7). Their `pRegistry` independently arrives at the same
+  registry-of-operations design we use, which is reassuring. Their task interface
+  does `AnalyzeTask` → preview → `ExecuteTask`, which is where the "preview before
+  apply" roadmap item comes from. Their mesh ops depend on Windows-only
+  third-party binaries — a weakness worth naming in our listing, since we use the
+  engine's own subsystems.
+- `Plugins/AssetsCleaner` — a shipped, paid unused-asset tool (builds fine on
+  5.7). Its settings confess that levels *"[cannot be] reliably check[ed] for
+  references"*, which corroborates hard-excluding Worlds. It's also where the
+  `EDependencyCategory::All` and project-settings-reference lessons came from.
 
 ## Build / run
 
@@ -106,22 +150,55 @@ Ordered by suggested priority:
 4. Optional: adjust thresholds in **Project Settings → Plugins → Optimization
    Toolset**.
 5. Smoke test: **Scan Level** → check Analyze findings → **Optimize** → **Apply**
-   on a finding → confirm the change (Nanite, LOD1–3, simple collision, or light
-   mobility) and that **Ctrl+Z** reverts it.
+   on a finding → confirm the change (Nanite, LOD1–3, simple collision, light
+   mobility, texture compression, or a group of actors collapsing into one HISM
+   actor) and that **Ctrl+Z** reverts it.
+6. Cleanup → **Measure** for the project size bar; the actions there are *not*
+   Undo-able, so try them on a scratch project first.
 
 ## Gotchas already hit (don't rediscover these)
 
-- **Slate colours are linear.** Author palette as sRGB hex via
-  `FLinearColor(FColor(0x..))` or the UI washes out to grey.
-- **dllexport + move-only members.** Don't put `MODULE_API` on a class holding
-  `TArray<TUniquePtr<...>>` (MSVC forces the copy ctor → deleted-function error).
-  `FToolsetRegistry` is intentionally *not* exported.
-- **SVG icons must be white** (`#FFFFFF`) so `SImage.ColorAndOpacity` can tint
-  them per state. Source art came in salmon; it was recoloured to white.
-- **Include paths that bit us:** `FSlateVectorImageBrush`/`FSlateImageBrush` are in
-  `Brushes/SlateImageBrush.h`; `IPlugin` is in `Interfaces/IPluginManager.h` (no
-  separate `IPlugin.h`).
-- **Risky version-sensitive APIs:** `UStaticMesh::NaniteSettings.bEnabled`
-  (direct member; fall back to `SetNaniteSettings()` if a version rejects it) and
-  `UStaticMeshEditorSubsystem::SetLodsWithNotification` / `FStaticMeshReductionOptions`
-  (module `StaticMeshEditor`; name may differ across versions).
+**Slate colour, two separate traps.** Both cost a build each.
+- *Colours are linear.* Author the palette as sRGB hex via `FLinearColor(FColor(0x..))`
+  or the whole UI washes out to grey.
+- *Tints multiply.* `BorderBackgroundColor` and `ColorAndOpacity` multiply the
+  brush's own tint, they don't replace it. Anything coloured at runtime must sit
+  on a **white** brush — hence `Toolset.Fill` / `Fill.Rounded` / `Fill.Pill`, and
+  hence the SVG icons being recoloured to `#FFFFFF`. A dark brush times a bright
+  colour is just a dark colour; a 6%-alpha brush times anything is invisible.
+
+**Verifying engine APIs: grep the class, not the file.** Two wrong assumptions
+came from grepping a header and assuming the match belonged to the class above it:
+- `bSupportAllShaderPermutations` is on `URendererOverrideSettings`, not
+  `URendererSettings` — same header, different object.
+- `GameDefaultMap` / `ServerDefaultMap` / `GlobalDefaultGameMode` are **private**
+  on `UGameMapsSettings`; use the static getters.
+- Also check the *property* name, not the console variable: the GI method member
+  is `DynamicGlobalIllumination`, while the cvar is `r.DynamicGlobalIlluminationMethod`.
+
+**The engine may already do what you're about to check for.** `UTexture` forces
+`SRGB = false` whenever compression is Normalmap/Masks/Alpha/HDR
+([Texture.cpp](E:/EpicGames/UE_5.7/Engine/Source/Runtime/Engine/Private/Texture.cpp)),
+so a "normal map with sRGB on" check would never fire. What the engine *can't*
+know is a texture's role — hence asking the materials instead.
+
+**Asset references are wider than `Package`.** `GetReferencers`/`GetDependencies`
+default to `EDependencyCategory::Package`. Use `::All` when deciding whether
+something is unused: `Manage` references are how the Asset Manager links primary
+assets to what its rules pull in, and they never appear as package references.
+And some assets are referenced by *no* asset at all — the default game mode,
+game instance and startup maps live in project settings as paths.
+
+**dllexport + move-only members.** Don't put `MODULE_API` on a class holding
+`TArray<TUniquePtr<...>>` — MSVC force-generates the copy ctor and it fails to
+compile. `FToolsetRegistry` is intentionally *not* exported.
+
+**Include paths that bit us:** `FSlateVectorImageBrush`/`FSlateImageBrush` are in
+`Brushes/SlateImageBrush.h`; `IPlugin` is in `Interfaces/IPluginManager.h` (no
+separate `IPlugin.h`); `AssetManagerEditorModule.h` is in a *plugin*
+(`Engine/Plugins/Editor/AssetManagerEditor`), not `Engine/Source`.
+
+**Risky version-sensitive APIs:** `UStaticMesh::NaniteSettings.bEnabled`
+(direct member; fall back to `SetNaniteSettings()` if a version rejects it) and
+`UStaticMeshEditorSubsystem::SetLodsWithNotification` / `FStaticMeshReductionOptions`
+(module `StaticMeshEditor`; name may differ across versions).

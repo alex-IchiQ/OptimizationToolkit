@@ -8,8 +8,14 @@ most importantly — **how to add a new analyze pass or fix**.
 Single editor module `OptimizationToolsetEditor` (`Type: Editor`, `LoadingPhase:
 PostEngineInit`, Win64/Mac/Linux). Build deps of note in
 `OptimizationToolsetEditor.Build.cs`: `UnrealEd`, `ToolMenus`, `LevelEditor`,
-`Projects` (IPluginManager), `DeveloperSettings`, `StaticMeshEditor` (LOD
-subsystem), Slate/SlateCore.
+`Projects` (IPluginManager), `DeveloperSettings` (settings object),
+`StaticMeshEditor` (LOD + collision subsystem), `AssetRegistry`, `AssetTools`
+(redirector fixup, asset delete), `EngineSettings` (UGameMapsSettings),
+`AssetManagerEditor` (asset disk sizes), Slate/SlateCore.
+
+The `.uplugin` declares two plugin dependencies: `EditorScriptingUtilities` and
+`AssetManagerEditor` (the latter is `EnabledByDefault` in the engine, but a
+module dependency on it must not rely on that).
 
 `FOptimizationToolsetEditorModule::StartupModule()` does three things:
 `FToolsetStyle::Initialize()`, `FToolsetRegistry::Get().RegisterDefaults()`, and
@@ -22,7 +28,7 @@ Public/Toolset/
   ToolsetCompat.h      OPTIMIZATION_* engine-version macros / feature flags
   OptimizationToolsetSettings.h  UDeveloperSettings-backed analyze thresholds
   ToolsetTypes.h       ESeverity, ECategory, FFinding, FScanResult, FAnalyzeThresholds
-  ToolsetRegistry.h    FToolsetRegistry (+ includes the two interfaces)
+  ToolsetRegistry.h    FToolsetRegistry (+ includes the three interfaces)
   ToolsetStyle.h       FToolsetStyle (palette + brushes + text styles)
   SToolsetWindow.h     SToolsetWindow, EToolsetSection
   Analyzer/
@@ -33,6 +39,7 @@ Public/Toolset/
     IOptimizationFix.h
   Cleanup/
     ICleanupAction.h
+    ProjectSizeReport.h  EAssetCategory + FProjectSizeReport (read-only, not an action)
 Private/Toolset/
   ToolsetRegistry.cpp  Get() + RegisterDefaults() (the one place features are listed)
   ToolsetStyle.cpp
@@ -40,14 +47,19 @@ Private/Toolset/
   Analyzer/
     LevelAnalyzer.cpp
     Passes/            one file per pass: StaticMeshPass, TexturePass,
-                       MaterialPass, LightingPass, InstancingCandidatePass
+                       MaterialPass, LightingPass, InstancingCandidatePass,
+                       ProjectSettingsPass, BlueprintTickPass,
+                       TextureCompressionPass, BlueprintDependencyPass
   Optimization/
     Fixes/             one file per fix: EnableNaniteFix, GenerateLODsFix,
-                       SimpleCollisionFix, ReviewLightMobilityFix
+                       SimpleCollisionFix, ReviewLightMobilityFix,
+                       ConvertToInstancesFix, TextureSettingsFixes (two fixes:
+                       normal map compression + data texture sRGB)
                        + FixUtils.h (shared MeshFromFinding helper)
   Cleanup/
+    ProjectSizeReport.cpp
     Actions/           one file per action: SaveDirtyPackagesAction,
-                       FixUpRedirectorsAction
+                       FixUpRedirectorsAction, DeleteUnusedAssetsAction
 Resources/
   *.svg (white, one per nav section), vera.png (mascot)
 ```
