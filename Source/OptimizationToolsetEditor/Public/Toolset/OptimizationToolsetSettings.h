@@ -73,7 +73,7 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category="Materials", meta=(ClampMin="50", ClampMax="10000", UIMin="100", UIMax="2000"))
 	int32 MaterialInstructionBudget = 300;
 
-	/** Number of movable lights allowed in the current level before per-light findings appear. */
+	/** Number of movable lights allowed in each loaded level before per-light findings appear. */
 	UPROPERTY(EditAnywhere, Config, Category="Lighting", meta=(ClampMin="0", ClampMax="512", UIMin="0", UIMax="128"))
 	int32 MovableLightBudget = 24;
 

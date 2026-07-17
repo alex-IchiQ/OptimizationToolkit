@@ -36,6 +36,16 @@ enum class ECategory : uint8
 	Count	// iteration bound; never assigned to a finding
 };
 
+/** The ownership boundary at which a finding is judged and should be resolved. */
+enum class EFindingScope : uint8
+{
+	Asset,		// one content asset, regardless of how many levels use it
+	Actor,		// one placed actor or component override
+	Level,		// an aggregate budget or relationship inside one ULevel
+	Project,	// project-wide configuration
+	System		// analyzer/editor state rather than user content
+};
+
 /**
  * A single issue produced by an analyzer pass.
  *
@@ -54,6 +64,7 @@ struct FFinding
 
 	ESeverity Severity = ESeverity::Minor;
 	ECategory Category = ECategory::Meshes;
+	EFindingScope Scope = EFindingScope::Actor;
 
 	/** Short one-line title, e.g. "Nanite candidate not enabled". */
 	FText Title;
@@ -72,9 +83,9 @@ struct FFinding
 
 	/**
 	 * The asset this finding is really about, when it is an asset rather than a
-	 * placed actor (a texture, a material). TargetActor only says where to look
-	 * in the viewport; a fix that edits the asset needs the asset itself, and for
-	 * something like a texture there is no path from the actor back to it.
+	 * placed actor (a mesh, texture, or material). Go to selects this in Content
+	 * Browser before falling back to TargetActor; fixes that edit an asset also
+	 * use the same explicit target.
 	 */
 	TWeakObjectPtr<UObject> TargetAsset;
 
@@ -100,12 +111,13 @@ struct FFinding
 	 */
 	FText LevelName;
 
-	FFinding() = default;
+	FFinding() = delete;
 
-	FFinding(FName InTypeId, ESeverity InSeverity, ECategory InCategory, FText InTitle, FText InSubject)
+	FFinding(FName InTypeId, ESeverity InSeverity, ECategory InCategory, EFindingScope InScope, FText InTitle, FText InSubject)
 		: TypeId(InTypeId)
 		, Severity(InSeverity)
 		, Category(InCategory)
+		, Scope(InScope)
 		, Title(MoveTemp(InTitle))
 		, Subject(MoveTemp(InSubject))
 	{
@@ -154,7 +166,7 @@ struct FAnalyzeThresholds
 	int32 MaterialSlotBudget = 8;			// mesh sections/material slots before review
 	int32 MaterialSamplerBudget = 12;		// texture samplers before review (hard limit is 16)
 	int32 MaterialInstructionBudget = 300;	// shader instructions before review
-	int32 MovableLightBudget = 24;			// dynamic lights per level before we warn
+	int32 MovableLightBudget = 24;			// dynamic lights in each loaded level before we warn
 	int32 LightmapResolutionBudget = 512;	// lightmap res on one component before we warn
 	int32 InstancingCandidateCount = 10;	// compatible repeated actors worth batching
 	int32 DependencyChainSizeMB = 64;		// disk a Blueprint may drag in before we warn

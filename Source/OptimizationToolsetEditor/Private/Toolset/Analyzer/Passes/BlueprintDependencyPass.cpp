@@ -150,7 +150,7 @@ namespace
 	 */
 	FFinding MakeUnavailableFinding(const FText& Reason)
 	{
-		FFinding F(TEXT("Blueprint.DependencyCheckUnavailable"), ESeverity::Minor, ECategory::Blueprints,
+		FFinding F(TEXT("Blueprint.DependencyCheckUnavailable"), ESeverity::Minor, ECategory::Blueprints, EFindingScope::System,
 			LOCTEXT("UnavailableTitle", "Blueprint dependency check did not run"),
 			LOCTEXT("UnavailableSubject", "Dependency chain sizes"));
 		F.WhyItMatters = FText::Format(
@@ -255,7 +255,7 @@ void FBlueprintDependencyPass::Run(const FLevelScanContext& Context, const FAnal
 		const ESeverity Severity = Chain.TotalBytes >= ThresholdBytes * 4
 			? ESeverity::Major : ESeverity::Minor;
 
-		FFinding F(TEXT("Blueprint.HeavyDependencyChain"), Severity, ECategory::Blueprints,
+		FFinding F(TEXT("Blueprint.HeavyDependencyChain"), Severity, ECategory::Blueprints, EFindingScope::Asset,
 			LOCTEXT("Title", "Blueprint pulls in a large dependency chain"),
 			FText::Format(LOCTEXT("Subject", "{0} — {1} across {2} assets"),
 				FText::FromString(FPackageName::GetShortName(Pair.Key)),
@@ -268,6 +268,10 @@ void FBlueprintDependencyPass::Run(const FLevelScanContext& Context, const FAnal
 			LOCTEXT("Fix", "Heaviest: {0}. Make the ones that aren't needed immediately soft references (TSoftObjectPtr) and load them on demand."),
 			DescribeHeaviest(Chain));
 		F.TargetActor = Pair.Value;
+		if (const AActor* Owner = Pair.Value.Get())
+		{
+			F.TargetAsset = Owner->GetClass()->ClassGeneratedBy;
+		}
 		Out.Findings.Add(MoveTemp(F));
 	}
 }

@@ -4,6 +4,7 @@
 
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine/Level.h"
 #include "Materials/MaterialInterface.h"
 #include "Components/StaticMeshComponent.h"
 
@@ -14,6 +15,7 @@ namespace
 	/** Properties that must match before actors are suggested as one instance group. */
 	struct FInstancingKey
 	{
+		const ULevel* Level = nullptr;
 		const UStaticMesh* Mesh = nullptr;
 		TArray<const UMaterialInterface*> Materials;
 		FName CollisionProfile;
@@ -24,7 +26,8 @@ namespace
 
 		bool operator==(const FInstancingKey& Other) const
 		{
-			return Mesh == Other.Mesh
+			return Level == Other.Level
+				&& Mesh == Other.Mesh
 				&& Materials == Other.Materials
 				&& CollisionProfile == Other.CollisionProfile
 				&& CollisionEnabled == Other.CollisionEnabled
@@ -38,7 +41,7 @@ namespace
 		// hash collision only costs an extra equality check.
 		friend uint32 GetTypeHash(const FInstancingKey& Key)
 		{
-			uint32 Hash = GetTypeHash(Key.Mesh);
+			uint32 Hash = HashCombine(GetTypeHash(Key.Level), GetTypeHash(Key.Mesh));
 			for (const UMaterialInterface* Material : Key.Materials)
 			{
 				Hash = HashCombine(Hash, GetTypeHash(Material));
@@ -73,6 +76,7 @@ void FInstancingCandidatePass::Run(const FLevelScanContext& Context, const FAnal
 		}
 
 		FInstancingKey Key;
+		Key.Level = Actor->GetLevel();
 		Key.Mesh = Mesh;
 		Key.CollisionProfile = Component->GetCollisionProfileName();
 		Key.CollisionEnabled = Component->GetCollisionEnabled();
@@ -103,7 +107,7 @@ void FInstancingCandidatePass::Run(const FLevelScanContext& Context, const FAnal
 		const ESeverity Severity = Actors.Num() >= T.InstancingCandidateCount * 3
 			? ESeverity::Major : ESeverity::Minor;
 
-		FFinding F(TEXT("Mesh.InstancingCandidate"), Severity, ECategory::Meshes,
+		FFinding F(TEXT("Mesh.InstancingCandidate"), Severity, ECategory::Meshes, EFindingScope::Level,
 			LOCTEXT("InstancingCandidateTitle", "Repeated static meshes could be instanced"),
 			FText::Format(LOCTEXT("InstancingCandidateSubject", "{0} x {1}"),
 				FText::FromString(Pair.Key.Mesh->GetName()), FText::AsNumber(Actors.Num())));

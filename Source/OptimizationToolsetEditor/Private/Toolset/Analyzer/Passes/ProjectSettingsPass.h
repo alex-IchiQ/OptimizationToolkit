@@ -9,7 +9,7 @@
  * Project-wide rendering settings that cost performance everywhere.
  *
  * The only pass that ignores the level entirely: these are project settings, not
- * placed actors. It lives in Analyze anyway because it produces the same thing
+ * placed actors. It lives in the shared scan because it produces the same thing
  * every other pass does — a finding with a severity, a reason and a next step —
  * and a user hunting for lost frames should not have to look in two places.
  *

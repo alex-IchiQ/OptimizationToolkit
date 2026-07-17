@@ -31,11 +31,12 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 		// report working code as broken.
 		if (!Mesh)
 		{
-			FFinding F(TEXT("Mesh.EmptyMesh"), ESeverity::Minor, ECategory::Meshes,
+			FFinding F(TEXT("Mesh.EmptyMesh"), ESeverity::Minor, ECategory::Meshes, EFindingScope::Actor,
 				LOCTEXT("EmptyMeshTitle", "Static mesh actor has no mesh assigned"), FText::FromString(Actor->GetActorNameOrLabel()));
 			F.WhyItMatters = LOCTEXT("EmptyMeshWhy", "The actor still loads, ticks its transform and takes up a slot in the level, but draws nothing.");
 			F.HowToFix = LOCTEXT("EmptyMeshFix", "Assign the intended mesh, or delete the actor if it is left over from an earlier setup.");
 			F.TargetActor = Actor;
+			F.FixId = TEXT("Fix_DeleteEmptyMeshActor");
 			Out.Findings.Add(MoveTemp(F));
 			continue;
 		}
@@ -60,11 +61,12 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 		{
 			if (Body->CollisionTraceFlag == ECollisionTraceFlag::CTF_UseComplexAsSimple)
 			{
-				FFinding F(TEXT("Mesh.ComplexCollision"), ESeverity::Minor, ECategory::Collision,
+				FFinding F(TEXT("Mesh.ComplexCollision"), ESeverity::Minor, ECategory::Collision, EFindingScope::Asset,
 					LOCTEXT("ComplexCollisionTitle", "Complex (per-poly) collision used as simple"), Subject);
 				F.WhyItMatters = LOCTEXT("ComplexCollisionWhy", "Per-poly collision is far more expensive to query than a primitive hull.");
 				F.HowToFix = LOCTEXT("ComplexCollisionFix", "Add a simple collision primitive and switch the trace flag to Default.");
 				F.TargetActor = Actor;
+				F.TargetAsset = Mesh;
 				F.FixId = TEXT("Fix_SimpleCollision");
 				Out.Findings.Add(MoveTemp(F));
 			}
@@ -73,13 +75,14 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 		// --- Excessive triangles without Nanite: a hard performance cliff.
 		if (!bNanite && NumTris >= T.ExcessiveTriangles)
 		{
-			FFinding F(TEXT("Mesh.ExcessiveTriangles"), ESeverity::Critical, ECategory::Meshes,
+			FFinding F(TEXT("Mesh.ExcessiveTriangles"), ESeverity::Critical, ECategory::Meshes, EFindingScope::Asset,
 				LOCTEXT("ExcessiveTrisTitle", "Excessive triangles on a non-Nanite mesh"), Subject);
 			F.WhyItMatters = FText::Format(
 				LOCTEXT("ExcessiveTrisWhy", "{0} triangles rendered without Nanite hammers the GPU and draw-call budget."),
 				FText::AsNumber(NumTris));
 			F.HowToFix = LOCTEXT("ExcessiveTrisFix", "Enable Nanite, or add aggressive LODs / decimate the source mesh.");
 			F.TargetActor = Actor;
+			F.TargetAsset = Mesh;
 			F.FixId = TEXT("Fix_EnableNanite");
 			Out.Findings.Add(MoveTemp(F));
 		}
@@ -87,13 +90,14 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 		// --- Nanite candidate: heavy enough to benefit, but not turned on.
 		else if (!bNanite && NumTris >= T.NaniteCandidateTriangles)
 		{
-			FFinding F(TEXT("Mesh.NaniteCandidate"), ESeverity::Major, ECategory::Meshes,
+			FFinding F(TEXT("Mesh.NaniteCandidate"), ESeverity::Major, ECategory::Meshes, EFindingScope::Asset,
 				LOCTEXT("NaniteCandidateTitle", "Nanite candidate not enabled"), Subject);
 			F.WhyItMatters = FText::Format(
 				LOCTEXT("NaniteCandidateWhy", "At {0} triangles this mesh would render cheaper and self-LOD with Nanite."),
 				FText::AsNumber(NumTris));
 			F.HowToFix = LOCTEXT("NaniteCandidateFix", "Enable Nanite on the static mesh (one-click fix available).");
 			F.TargetActor = Actor;
+			F.TargetAsset = Mesh;
 			F.FixId = TEXT("Fix_EnableNanite");
 			Out.Findings.Add(MoveTemp(F));
 		}
@@ -103,13 +107,14 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 		// all-Nanite content pipeline can still make the setting reasonable.
 		if (bNanite && T.NaniteMinimumTriangles > 0 && NumTris <= T.NaniteMinimumTriangles)
 		{
-			FFinding F(TEXT("Mesh.LowPolyNanite"), ESeverity::Minor, ECategory::Meshes,
+			FFinding F(TEXT("Mesh.LowPolyNanite"), ESeverity::Minor, ECategory::Meshes, EFindingScope::Asset,
 				LOCTEXT("LowPolyNaniteTitle", "Nanite enabled on a low-poly mesh"), Subject);
 			F.WhyItMatters = FText::Format(
 				LOCTEXT("LowPolyNaniteWhy", "This mesh has only {0} triangles, so Nanite's cluster data, build time, and streaming overhead may outweigh its geometry savings."),
 				FText::AsNumber(NumTris));
 			F.HowToFix = LOCTEXT("LowPolyNaniteFix", "Disable Nanite unless high instance counts or a deliberate Nanite-only pipeline justify keeping it enabled.");
 			F.TargetActor = Actor;
+			F.TargetAsset = Mesh;
 			F.FixId = TEXT("Fix_DisableNanite");
 			Out.Findings.Add(MoveTemp(F));
 		}
@@ -118,11 +123,12 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 		// --- Missing LODs on a non-Nanite mesh: no distance falloff at all.
 		if (!bNanite && Mesh->GetNumLODs() <= 1 && NumTris >= T.NaniteCandidateTriangles)
 		{
-			FFinding F(TEXT("Mesh.MissingLODs"), ESeverity::Major, ECategory::Meshes,
+			FFinding F(TEXT("Mesh.MissingLODs"), ESeverity::Major, ECategory::Meshes, EFindingScope::Asset,
 				LOCTEXT("MissingLODTitle", "No LODs on a heavy non-Nanite mesh"), Subject);
 			F.WhyItMatters = LOCTEXT("MissingLODWhy", "Without LODs the full triangle count is drawn at every distance.");
 			F.HowToFix = LOCTEXT("MissingLODFix", "Enable Nanite, or generate an LOD chain (auto-LOD fix available).");
 			F.TargetActor = Actor;
+			F.TargetAsset = Mesh;
 			F.FixId = TEXT("Fix_GenerateLODs");
 			Out.Findings.Add(MoveTemp(F));
 		}

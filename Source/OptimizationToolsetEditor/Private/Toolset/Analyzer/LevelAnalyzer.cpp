@@ -85,6 +85,26 @@ namespace
 		Out.Meshes = UniqueMeshes.Num();
 		Out.Materials = UniqueMaterials.Num();
 	}
+
+	bool HasValidScopeTarget(const FFinding& Finding)
+	{
+		switch (Finding.Scope)
+		{
+		case EFindingScope::Asset:
+			return Finding.TargetAsset.IsValid();
+		case EFindingScope::Actor:
+			return Finding.TargetActor.IsValid();
+		case EFindingScope::Level:
+			return Finding.TargetActor.IsValid() || Finding.RelatedActors.ContainsByPredicate(
+				[](const TWeakObjectPtr<AActor>& Actor) { return Actor.IsValid(); });
+		case EFindingScope::Project:
+			return Finding.Category == ECategory::Project;
+		case EFindingScope::System:
+			return true;
+		default:
+			return false;
+		}
+	}
 }
 
 FScanResult FLevelAnalyzer::AnalyzeCurrentLevel(const TSet<FName>& ExcludedLevelPackages)
@@ -154,6 +174,16 @@ FScanResult FLevelAnalyzer::AnalyzeCurrentLevel(const TSet<FName>& ExcludedLevel
 		{
 			Pass->Run(Context, Thresholds, Result);
 		}
+	}
+
+	// A scope is a contract with navigation and fixes, not display metadata.
+	// Catch a new pass that declares an asset/actor/level finding but forgets the
+	// corresponding target while the mistake is still local to that pass.
+	for (const FFinding& Finding : Result.Findings)
+	{
+		ensureMsgf(HasValidScopeTarget(Finding),
+			TEXT("Finding '%s' has scope %d but no compatible target."),
+			*Finding.TypeId.ToString(), static_cast<int32>(Finding.Scope));
 	}
 
 	// Stamp the sub-level onto every finding that points at an actor. Done here,

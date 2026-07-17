@@ -145,7 +145,7 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 					? ESeverity::Minor
 					: (Density > T.TextureDensityBudget * 2 ? ESeverity::Major : ESeverity::Minor);
 
-				FFinding F(TEXT("Texture.Oversized"), Severity, ECategory::Textures,
+				FFinding F(TEXT("Texture.Oversized"), Severity, ECategory::Textures, EFindingScope::Asset,
 					LOCTEXT("OverDenseTextureTitle", "Texture resolution exceeds what the surface shows"), Subject);
 				F.WhyItMatters = FText::Format(
 					LOCTEXT("OverDenseTextureWhy", "Even where it is stretched furthest, this texture delivers about {0} texels per metre of surface against a budget of {1}. Texels nobody can see still cost memory, streaming and build time."),
@@ -160,7 +160,7 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 		{
 			const ESeverity Severity = Texture->VirtualTextureStreaming || bSpecialPurpose
 				? ESeverity::Minor : ESeverity::Major;
-			FFinding F(TEXT("Texture.Oversized"), Severity, ECategory::Textures,
+			FFinding F(TEXT("Texture.Oversized"), Severity, ECategory::Textures, EFindingScope::Asset,
 				LOCTEXT("OversizedTextureTitle", "Texture exceeds the configured size limit"), Subject);
 			F.WhyItMatters = FText::Format(
 				LOCTEXT("OversizedTextureWhy", "Its effective longest side is {0}px; large textures increase memory, streaming, and build cost. This level has no texture streaming data, so this judges the texture's own size — it cannot tell a huge surface from a tiny one."),
@@ -174,11 +174,12 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 		if (!bSpecialPurpose && !bPowerOfTwo
 			&& Texture->PowerOfTwoMode == ETexturePowerOfTwoSetting::None)
 		{
-			FFinding F(TEXT("Texture.NonPowerOfTwo"), ESeverity::Minor, ECategory::Textures,
+			FFinding F(TEXT("Texture.NonPowerOfTwo"), ESeverity::Minor, ECategory::Textures, EFindingScope::Asset,
 				LOCTEXT("NonPowerOfTwoTitle", "Texture dimensions are not power-of-two"), Subject);
 			F.WhyItMatters = LOCTEXT("NonPowerOfTwoWhy", "Unpadded dimensions can prevent a complete mip chain and make streaming less efficient.");
 			F.HowToFix = LOCTEXT("NonPowerOfTwoFix", "Resize the source or choose an appropriate Padding and Resizing mode in the texture asset.");
 			F.TargetActor = Pair.Value;
+			F.TargetAsset = Texture;
 			Out.Findings.Add(MoveTemp(F));
 		}
 
@@ -186,11 +187,12 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 			&& Texture->MipGenSettings == TMGS_NoMipmaps && !Texture->VirtualTextureStreaming)
 		{
 			const ESeverity Severity = LongestSide >= 2048 ? ESeverity::Major : ESeverity::Minor;
-			FFinding F(TEXT("Texture.MipsDisabled"), Severity, ECategory::Textures,
+			FFinding F(TEXT("Texture.MipsDisabled"), Severity, ECategory::Textures, EFindingScope::Asset,
 				LOCTEXT("MissingTextureMipsTitle", "Large texture has mipmaps disabled"), Subject);
 			F.WhyItMatters = LOCTEXT("MissingTextureMipsWhy", "Rendering the full-resolution texture at every distance wastes bandwidth and can shimmer.");
 			F.HowToFix = LOCTEXT("MissingTextureMipsFix", "Use FromTextureGroup mip generation unless this asset intentionally requires exact texels.");
 			F.TargetActor = Pair.Value;
+			F.TargetAsset = Texture;
 			Out.Findings.Add(MoveTemp(F));
 		}
 	}

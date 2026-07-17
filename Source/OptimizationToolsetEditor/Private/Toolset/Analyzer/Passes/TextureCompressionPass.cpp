@@ -93,7 +93,7 @@ void FTextureCompressionPass::Run(const FLevelScanContext& Context, const FAnaly
 			continue;
 		}
 
-		FFinding F(TEXT("Texture.NormalMapWrongCompression"), ESeverity::Major, ECategory::Textures,
+		FFinding F(TEXT("Texture.NormalMapWrongCompression"), ESeverity::Major, ECategory::Textures, EFindingScope::Asset,
 			LOCTEXT("NormalTitle", "Normal map is not using Normalmap compression"),
 			FText::FromString(Texture->GetName()));
 		F.WhyItMatters = LOCTEXT("NormalWhy", "This texture feeds a material's Normal input but is compressed as colour, which both wastes memory and mangles the normals it stores.");
@@ -120,7 +120,7 @@ void FTextureCompressionPass::Run(const FLevelScanContext& Context, const FAnaly
 			continue;
 		}
 
-		FFinding F(TEXT("Texture.DataTextureSRGB"), ESeverity::Major, ECategory::Textures,
+		FFinding F(TEXT("Texture.DataTextureSRGB"), ESeverity::Major, ECategory::Textures, EFindingScope::Asset,
 			LOCTEXT("DataTitle", "Data texture is treated as sRGB"), FText::FromString(Texture->GetName()));
 		F.WhyItMatters = LOCTEXT("DataWhy", "This texture feeds roughness, metallic, AO or specular, which are numbers rather than colour. Decoding it through sRGB bends those numbers.");
 		F.HowToFix = LOCTEXT("DataFix", "Turn sRGB off on the texture (one-click fix available).");

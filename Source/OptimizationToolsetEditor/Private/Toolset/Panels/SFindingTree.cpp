@@ -31,7 +31,7 @@ void SFindingTree::Construct(const FArguments& InArgs)
 
 void SFindingTree::SetFindings(const TArray<TSharedPtr<FFinding>>& Findings)
 {
-	BuildCategoryTree(Findings, Tree);
+	BuildProblemTree(Findings, Tree);
 
 	if (!TreeView.IsValid())
 	{
@@ -48,11 +48,11 @@ void SFindingTree::SetFindings(const TArray<TSharedPtr<FFinding>>& Findings)
 	}
 }
 
-void SFindingTree::BuildCategoryTree(const TArray<TSharedPtr<FFinding>>& Source, TArray<TSharedPtr<FFindingNode>>& OutTree)
+void SFindingTree::BuildProblemTree(const TArray<TSharedPtr<FFinding>>& Source, TArray<TSharedPtr<FFindingNode>>& OutTree)
 {
 	OutTree.Reset();
 
-	TMap<ECategory, TSharedPtr<FFindingNode>> Groups;
+	TMap<FName, TSharedPtr<FFindingNode>> Groups;
 	for (const TSharedPtr<FFinding>& Finding : Source)
 	{
 		if (!Finding.IsValid())
@@ -60,10 +60,13 @@ void SFindingTree::BuildCategoryTree(const TArray<TSharedPtr<FFinding>>& Source,
 			continue;
 		}
 
-		TSharedPtr<FFindingNode>& Group = Groups.FindOrAdd(Finding->Category);
+		const FName GroupId = Finding->TypeId.IsNone() ? FName(*Finding->Title.ToString()) : Finding->TypeId;
+		TSharedPtr<FFindingNode>& Group = Groups.FindOrAdd(GroupId);
 		if (!Group.IsValid())
 		{
 			Group = MakeShared<FFindingNode>();
+			Group->TypeId = GroupId;
+			Group->GroupTitle = Finding->Title;
 			Group->Category = Finding->Category;
 		}
 
@@ -75,11 +78,15 @@ void SFindingTree::BuildCategoryTree(const TArray<TSharedPtr<FFinding>>& Source,
 
 	Groups.GenerateValueArray(OutTree);
 
-	// Fixed category order so groups don't reshuffle between scans; findings keep
-	// the severity order the analyzer already sorted them into.
+	// Keep categories stable in the all-results view, then sort problem types by
+	// their display title. Findings retain the analyzer's severity order.
 	OutTree.Sort([](const TSharedPtr<FFindingNode>& A, const TSharedPtr<FFindingNode>& B)
 	{
-		return static_cast<uint8>(A->Category) < static_cast<uint8>(B->Category);
+		if (A->Category != B->Category)
+		{
+			return static_cast<uint8>(A->Category) < static_cast<uint8>(B->Category);
+		}
+		return A->GroupTitle.CompareTo(B->GroupTitle) < 0;
 	});
 }
 
@@ -91,7 +98,7 @@ void SFindingTree::OnGetChildren(TSharedPtr<FFindingNode> Node, TArray<TSharedPt
 	}
 }
 
-TSharedRef<SWidget> SFindingTree::MakeCategoryHeader(TSharedPtr<FFindingNode> Node)
+TSharedRef<SWidget> SFindingTree::MakeGroupHeader(TSharedPtr<FFindingNode> Node)
 {
 	// The worst thing in the group decides its colour, so a collapsed group still
 	// says whether it is worth opening.
@@ -121,10 +128,19 @@ TSharedRef<SWidget> SFindingTree::MakeCategoryHeader(TSharedPtr<FFindingNode> No
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 		[
 			SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Heading")
-			.Text(FToolsetStyle::LabelForCategory(Node->Category))
+			.Text(Node->GroupTitle)
 		]
 
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(8, 0, 0, 0))
+		[
+			SNew(SBorder).BorderImage(Brush("Toolset.Pill")).Padding(FMargin(7, 1))
+			[
+				SNew(STextBlock).TextStyle(&S(), "Toolset.Text.Subtle")
+				.Text(FToolsetStyle::LabelForCategory(Node->Category))
+			]
+		]
+
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(6, 0, 0, 0))
 		[
 			SNew(SBorder).BorderImage(Brush("Toolset.Pill")).Padding(FMargin(7, 1))
 			[
@@ -136,7 +152,7 @@ TSharedRef<SWidget> SFindingTree::MakeCategoryHeader(TSharedPtr<FFindingNode> No
 
 TSharedRef<ITableRow> SFindingTree::OnGenerateRow(TSharedPtr<FFindingNode> Node, const TSharedRef<STableViewBase>& OwnerTable)
 {
-	if (Node->IsCategory())
+	if (Node->IsGroup())
 	{
 		// No SExpanderArrow of our own: STableRow::ConstructChildren already builds
 		// one for a tree, and SetContent *preserves* it (SetRowContent is the one
@@ -146,7 +162,7 @@ TSharedRef<ITableRow> SFindingTree::OnGenerateRow(TSharedPtr<FFindingNode> Node,
 			.ShowSelection(false)
 			.Padding(FMargin(6, 10, 6, 2))
 			[
-				MakeCategoryHeader(Node)
+				MakeGroupHeader(Node)
 			];
 	}
 

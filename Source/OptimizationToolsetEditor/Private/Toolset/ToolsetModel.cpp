@@ -26,6 +26,15 @@ void FToolsetModel::RunScan()
 	RebuildDerivedLists();
 }
 
+void FToolsetModel::InvalidateScan()
+{
+	LastScan = FScanResult();
+	bHasScanned = false;
+	bHasPreviousStats = false;
+	AllFindings.Reset();
+	ChangedEvent.Broadcast();
+}
+
 bool FToolsetModel::IsLevelIncluded(FName PackageName, bool bPersistentLevel) const
 {
 	if (const bool* Override = LevelInclusionOverrides.Find(PackageName))
@@ -58,12 +67,7 @@ void FToolsetModel::SetLevelIncluded(FName PackageName, bool bIncluded)
 	// Findings from the previous scope are now stale. In particular, leaving
 	// them fixable would let Optimize mutate an actor in a level the user just
 	// excluded. Clear the result and require one explicit scan of the new scope.
-	LastScan = FScanResult();
-	bHasScanned = false;
-	bHasPreviousStats = false;
-	AllFindings.Reset();
-	FixableFindings.Reset();
-	ChangedEvent.Broadcast();
+	InvalidateScan();
 }
 
 TSet<FName> FToolsetModel::BuildExcludedLevelPackages() const
@@ -94,18 +98,12 @@ TSet<FName> FToolsetModel::BuildExcludedLevelPackages() const
 void FToolsetModel::RebuildDerivedLists()
 {
 	AllFindings.Reset();
-	FixableFindings.Reset();
 
-	// One shared FFinding per row: Optimize shows the same object Analyze does, so
-	// a row can never disagree with itself about what it is describing.
+	// One shared FFinding per row keeps every consumer on the same object.
 	for (const FFinding& Finding : LastScan.Findings)
 	{
 		TSharedPtr<FFinding> Shared = MakeShared<FFinding>(Finding);
 		AllFindings.Add(Shared);
-		if (HasSupportedFix(Finding))
-		{
-			FixableFindings.Add(Shared);
-		}
 	}
 
 	ChangedEvent.Broadcast();
@@ -124,35 +122,18 @@ TArray<TSharedPtr<FFinding>> FToolsetModel::GetVisibleFindings() const
 	return Visible;
 }
 
-TArray<TSharedPtr<FFinding>> FToolsetModel::GetVisibleFixable() const
+int32 FToolsetModel::CountForCategory(ECategory Category) const
 {
-	TArray<TSharedPtr<FFinding>> Visible;
-	for (const TSharedPtr<FFinding>& Finding : FixableFindings)
-	{
-		if (Finding.IsValid() && PassesCategory(*Finding))
-		{
-			Visible.Add(Finding);
-		}
-	}
-	return Visible;
-}
-
-int32 FToolsetModel::CountForCategory(ECategory Category, bool bFixableOnly) const
-{
-	const TArray<TSharedPtr<FFinding>>& Source = bFixableOnly ? FixableFindings : AllFindings;
-
 	int32 Count = 0;
-	for (const TSharedPtr<FFinding>& Finding : Source)
+	for (const TSharedPtr<FFinding>& Finding : AllFindings)
 	{
 		if (!Finding.IsValid() || Finding->Category != Category)
 		{
 			continue;
 		}
-
-		// Analyze has severity/search filters above its list; a badge that ignored
-		// them would promise rows the panel won't show. Optimize has no such
-		// toolbar, so its badge counts everything fixable in the category.
-		if (!bFixableOnly && !PassesSeverityAndSearch(*Finding))
+		// The unified Optimize workspace owns severity/search filtering, so badges
+		// must count exactly what its category would currently show.
+		if (!PassesSeverityAndSearch(*Finding))
 		{
 			continue;
 		}
@@ -233,27 +214,4 @@ void FToolsetModel::ApplyFix(TSharedPtr<FFinding> Finding)
 	}
 
 	RunScan();	// the level changed; every view's numbers are now stale
-}
-
-void FToolsetModel::ApplyAllFixes()
-{
-	// Snapshot first: each Apply mutates the level, and the rescan at the end
-	// rebuilds the very array we are iterating.
-	TArray<TSharedPtr<FFinding>> Snapshot = FixableFindings;
-	for (const TSharedPtr<FFinding>& Finding : Snapshot)
-	{
-		if (!Finding.IsValid())
-		{
-			continue;
-		}
-		if (IOptimizationFix* Fix = FToolsetRegistry::Get().FindFix(Finding->FixId))
-		{
-			if (Fix->IsSupported())
-			{
-				Fix->Apply(*Finding);
-			}
-		}
-	}
-
-	RunScan();
 }

@@ -13,7 +13,6 @@ class SWidgetSwitcher;
 enum class EToolsetSection : uint8
 {
 	Dashboard = 0,
-	Analyze,
 	Optimize,
 	Profile,
 	Cleanup,
@@ -52,16 +51,16 @@ private:
 	bool IsSectionSelected(EToolsetSection Section) const { return CurrentSection == Section; }
 	FReply OnNavItemClicked(EToolsetSection Section);
 
-	/** Analyze and Optimize list their categories underneath; the rest don't. */
+	/** Optimize lists its categories underneath; the rest don't. */
 	static bool SectionHasCategories(EToolsetSection Section);
 	bool IsNavExpanded(EToolsetSection Section) const;
 
-	/** The category sub-items under Analyze / Optimize. */
+	/** The category sub-items under Optimize. */
 	TSharedRef<SWidget> BuildNavCategoryList(EToolsetSection Section);
 	TSharedRef<SWidget> BuildNavSubItem(EToolsetSection Section, ECategory Category);
 	void SelectSectionCategory(EToolsetSection Section, ECategory Category);
 	bool IsNavCategorySelected(EToolsetSection Section, ECategory Category) const;
-	int32 CountForNavCategory(EToolsetSection Section, ECategory Category) const;
+	int32 CountForNavCategory(ECategory Category) const;
 
 	// ---- Scan ---------------------------------------------------------------
 	FReply OnScanClicked();

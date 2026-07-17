@@ -47,11 +47,14 @@ Working:
   static-mesh LOD0 only, counted per ISM instance — because a user comparing it
   against the editor's own statistics window would otherwise read a difference as
   a bug.
-- **Analyze** *(functional)* — runs registered passes. Findings are grouped under
-  category headers in an `STreeView` (each header carries a count and a dot in the
+- **Optimize** *(functional, unified analysis workspace)* — runs registered passes.
+  Category sub-items expose their thresholds above the results. Findings are grouped
+  by stable problem `TypeId` in an `STreeView` (each header carries a count and a dot in the
   group's worst severity, so a collapsed group still says whether it's worth
-  opening). Above that: severity toggles, search, and a **Focus** button per row
-  that frames the offending actor. A finding in a loaded sub-level carries that
+  opening). Above that: severity toggles and search. Every finding declares an
+  `Asset`, `Actor`, `Level`, `Project`, or `System` scope. Navigation is labelled
+  accordingly: **Show in Content**, **Focus Actor**, or **Open Settings**. **Why** lives in
+  the card tooltip; supported fixes add a second **Apply** button. A finding in a loaded sub-level carries that
   level's name (`FFinding::LevelName`), stamped centrally by `FLevelAnalyzer`
   rather than by each pass. Passes: `FStaticMeshPass` (excessive triangles,
   Nanite candidates, low-poly meshes with Nanite enabled, missing LODs,
@@ -84,9 +87,8 @@ Working:
   real shipped numbers the source has to be pointed at a cooked
   DevelopmentAssetRegistry via `SetCurrentRegistrySource`; that selector is what
   a "Final Packaging" size mode would be built on.
-- **Optimize** *(functional)* — the findings that have a supported fix, grouped by
-  category the same way, with per-row **Apply** and an **Apply all** button. Every
-  fix is transactional (Undo/Redo) and the level auto-re-scans afterward. Fixes:
+- Every available fix is transactional (Undo/Redo) and the level auto-re-scans
+  afterward. Fixes:
   `FEnableNaniteFix`, `FDisableNaniteFix`,
   `FGenerateLODsFix`, `FSimpleCollisionFix`, `FReviewLightMobilityFix`,
   `FConvertToInstancesFix` (replaces a vetted group of repeated static-mesh
@@ -218,7 +220,7 @@ approach and the APIs, write our own.
 3. Open **Optimization Toolset** from the toolbar or Window menu.
 4. Optional: adjust thresholds in **Project Settings → Plugins → Optimization
    Toolset**.
-5. Smoke test: **Scan Level** → check Analyze findings → **Optimize** → **Apply**
+5. Smoke test: **Scan Level** → choose an **Optimize** category → **Go to** or **Apply**
    on a finding → confirm the change (Nanite, LOD1–3, simple collision, light
    mobility, texture compression, or a group of actors collapsing into one HISM
    actor) and that **Ctrl+Z** reverts it.

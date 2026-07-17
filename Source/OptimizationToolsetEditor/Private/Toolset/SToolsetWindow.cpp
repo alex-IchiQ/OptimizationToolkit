@@ -5,7 +5,6 @@
 #include "Toolset/ToolsetStyle.h"
 #include "Toolset/ToolsetWidgetUtils.h"
 
-#include "Toolset/Panels/SAnalyzePanel.h"
 #include "Toolset/Panels/SCleanupPanel.h"
 #include "Toolset/Panels/SDashboardPanel.h"
 #include "Toolset/Panels/SOptimizePanel.h"
@@ -32,6 +31,7 @@ using namespace ToolsetUI;
 void SToolsetWindow::Construct(const FArguments& InArgs)
 {
 	Model = MakeShared<FToolsetModel>();
+	ExpandedNavSections.Add(EToolsetSection::Optimize);
 
 	// Islands layout: a flat backdrop with rounded panels floating on it,
 	// separated by consistent gaps (outer padding + inter-slot margins).
@@ -101,12 +101,9 @@ TSharedRef<SWidget> SToolsetWindow::BuildSidebar()
 					BuildScanButton()
 				]
 
-				// Nav items (icon + label), with Analyze and Optimize listing their
-				// categories underneath.
+				// Optimize is the single findings workspace. Its categories remain
+				// available before a scan so their thresholds can be configured first.
 				+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 1))[ BuildNavItem(EToolsetSection::Dashboard, LOCTEXT("NavDashboard", "Dashboard"), "Toolset.Icon.Dashboard") ]
-
-				+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 1))[ BuildNavItem(EToolsetSection::Analyze,   LOCTEXT("NavAnalyze",   "Analyze"),   "Toolset.Icon.Analyze") ]
-				+ SVerticalBox::Slot().AutoHeight()[ BuildNavCategoryList(EToolsetSection::Analyze) ]
 
 				+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 1))[ BuildNavItem(EToolsetSection::Optimize,  LOCTEXT("NavOptimize",  "Optimize"),  "Toolset.Icon.Optimize") ]
 				+ SVerticalBox::Slot().AutoHeight()[ BuildNavCategoryList(EToolsetSection::Optimize) ]
@@ -193,7 +190,7 @@ TSharedRef<SWidget> SToolsetWindow::BuildScanButton()
 // ---------------------------------------------------------------------------
 bool SToolsetWindow::SectionHasCategories(EToolsetSection Section)
 {
-	return Section == EToolsetSection::Analyze || Section == EToolsetSection::Optimize;
+	return Section == EToolsetSection::Optimize;
 }
 
 bool SToolsetWindow::IsNavExpanded(EToolsetSection Section) const
@@ -240,9 +237,9 @@ bool SToolsetWindow::IsNavCategorySelected(EToolsetSection Section, ECategory Ca
 	return IsSectionSelected(Section) && Filter.IsSet() && Filter.GetValue() == Category;
 }
 
-int32 SToolsetWindow::CountForNavCategory(EToolsetSection Section, ECategory Category) const
+int32 SToolsetWindow::CountForNavCategory(ECategory Category) const
 {
-	return Model->CountForCategory(Category, /*bFixableOnly*/ Section == EToolsetSection::Optimize);
+	return Model->CountForCategory(Category);
 }
 
 TSharedRef<SWidget> SToolsetWindow::BuildNavCategoryList(EToolsetSection Section)
@@ -263,12 +260,9 @@ TSharedRef<SWidget> SToolsetWindow::BuildNavSubItem(EToolsetSection Section, ECa
 	return SNew(SButton)
 		.ButtonStyle(&S(), "Toolset.Nav.Button")
 		.ContentPadding(FMargin(0))
-		// Hidden unless the parent is open and the category actually found
-		// something: an empty list of dead ends is worse than no list.
 		.Visibility_Lambda([this, Section, Category]()
 		{
-			return (IsNavExpanded(Section) && CountForNavCategory(Section, Category) > 0)
-				? EVisibility::Visible : EVisibility::Collapsed;
+			return IsNavExpanded(Section) ? EVisibility::Visible : EVisibility::Collapsed;
 		})
 		.OnClicked_Lambda([this, Section, Category]()
 		{
@@ -304,9 +298,9 @@ TSharedRef<SWidget> SToolsetWindow::BuildNavSubItem(EToolsetSection Section, ECa
 				[
 					SNew(STextBlock)
 					.TextStyle(&S(), "Toolset.Text.Subtle")
-					.Text_Lambda([this, Section, Category]()
+					.Text_Lambda([this, Category]()
 					{
-						return FText::AsNumber(CountForNavCategory(Section, Category));
+						return FText::AsNumber(CountForNavCategory(Category));
 					})
 				]
 			]
@@ -401,7 +395,8 @@ void SToolsetWindow::SelectSection(EToolsetSection Section)
 FReply SToolsetWindow::OnScanClicked()
 {
 	Model->RunScan();
-	SelectSection(EToolsetSection::Analyze);	// jump to the results
+	SelectSection(EToolsetSection::Optimize);	// jump to the results
+	ExpandedNavSections.Add(EToolsetSection::Optimize);
 	return FReply::Handled();
 }
 
@@ -489,7 +484,6 @@ TSharedRef<SWidget> SToolsetWindow::BuildContent()
 	// Slot order must match EToolsetSection: the switcher is indexed by it.
 	ContentSwitcher = SNew(SWidgetSwitcher);
 	ContentSwitcher->AddSlot()[ SNew(SDashboardPanel).Model(Model) ];
-	ContentSwitcher->AddSlot()[ SNew(SAnalyzePanel).Model(Model) ];
 	ContentSwitcher->AddSlot()[ SNew(SOptimizePanel).Model(Model) ];
 	ContentSwitcher->AddSlot()[ SNew(SProfilePanel) ];
 	ContentSwitcher->AddSlot()[ SNew(SCleanupPanel) ];
@@ -518,7 +512,6 @@ FText SToolsetWindow::GetHeaderTitle() const
 	switch (CurrentSection)
 	{
 	case EToolsetSection::Dashboard: return LOCTEXT("HdrDashboard", "Dashboard");
-	case EToolsetSection::Analyze:   return LOCTEXT("HdrAnalyze", "Analyze");
 	case EToolsetSection::Optimize:  return LOCTEXT("HdrOptimize", "Optimize");
 	case EToolsetSection::Profile:   return LOCTEXT("HdrProfile", "Profile");
 	case EToolsetSection::Cleanup:   return LOCTEXT("HdrCleanup", "Cleanup");

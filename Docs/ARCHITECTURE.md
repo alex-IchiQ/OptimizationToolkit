@@ -27,7 +27,7 @@ registers the dockable tab + toolbar/menu entries.
 Public/Toolset/
   ToolsetCompat.h      OPTIMIZATION_* engine-version macros / feature flags
   OptimizationToolsetSettings.h  UDeveloperSettings-backed analyze thresholds
-  ToolsetTypes.h       ESeverity, ECategory, FFinding, FLevelStats, FScanResult, FAnalyzeThresholds
+  ToolsetTypes.h       ESeverity, ECategory, EFindingScope, FFinding, FLevelStats, FScanResult, FAnalyzeThresholds
   ToolsetRegistry.h    FToolsetRegistry (+ includes the three interfaces)
   ToolsetModel.h       FToolsetModel (scan state + filters + fixes; the panels' one shared object)
   ToolsetStyle.h       FToolsetStyle (palette + brushes + text styles)
@@ -48,8 +48,8 @@ Private/Toolset/
   ToolsetWidgetUtils.h S() / Brush() shorthand, header-only, used by every panel
   SToolsetWindow.cpp
   Panels/              one file per panel, like Passes/ and Fixes/:
-                       SFindingTree (grouped findings, shared by the two below),
-                       SDashboardPanel, SAnalyzePanel, SOptimizePanel,
+                       SFindingTree (findings grouped by problem TypeId),
+                       SDashboardPanel, SOptimizePanel,
                        SCleanupPanel, SProfilePanel, SPlaceholderPanel
   Analyzer/
     LevelAnalyzer.cpp
@@ -100,14 +100,19 @@ FToolsetRegistry  GetPasses() / GetFixes() / GetActions() / FindFix(FixId) / Reg
   Dashboard shows — not findings, nobody judges them), runs every registered pass
   against it, sorts, and returns `FScanResult`. Passes never iterate the world themselves — if a new pass needs a
   type that isn't cached, add a bucket to `FLevelScanContext`.
-- A finding's `FixId` (an `FName`) links it to the fix that resolves it. The
-  Optimize panel shows a finding only if `FToolsetRegistry::FindFix(FixId)` returns
-  a fix whose `IsSupported()` is true.
+- A finding's `FixId` (an `FName`) links it to the fix that resolves it. Optimize
+  shows every finding; a second **Apply** button appears only when
+  `FToolsetRegistry::FindFix(FixId)` returns a supported fix.
 - A finding's `TypeId` (an `FName`, e.g. `Mesh.MissingLODs`) identifies the *kind*
   of problem. `Title` is localizable display text and can't serve as an id.
   `FScanResult::HealthScore()` groups penalties by `TypeId` and caps each type's
   contribution, so one problem repeated 200 times can't pin the score to zero.
   **Every finding must set it** — it's the first constructor argument.
+- `EFindingScope` states who owns the problem: `Asset`, `Actor`, `Level`,
+  `Project`, or `System`. It is a navigation/fix contract, not decoration:
+  asset findings require `TargetAsset`, actor findings require `TargetActor`,
+  and level findings must point at an addressable actor/group. The analyzer
+  validates this contract after every pass.
 
 ## The model (`FToolsetModel`)
 
@@ -116,10 +121,10 @@ as a `TSharedPtr`. It owns the scan result, per-level scope overrides, the deriv
 filters, and the fix operations.
 
 ```
-RunScan() / ApplyFix() / ApplyAllFixes()     mutate, then broadcast
+RunScan() / ApplyFix() / InvalidateScan()    mutate, then broadcast
 GetLastScan() / GetPreviousStats()           the numbers
-GetVisibleFindings() / GetVisibleFixable()   filtered queries, built on demand
-CountForCategory(Category, bFixableOnly)     the nav badges
+GetVisibleFindings()                         filtered query, built on demand
+CountForCategory(Category)                   the nav badges
 SetSearchFilter() / ToggleSeverity() / SetCategoryFilter()
 OnChanged()                                  FSimpleMulticastDelegate: "redraw"
 ```
@@ -128,18 +133,16 @@ OnChanged()                                  FSimpleMulticastDelegate: "redraw"
   `SToolsetWindow`, so every panel needing them had to be built by that window.
   That is how one widget became six panels and 1800 lines.
 - **Views react to `OnChanged()`, they are not poked.** A fix applied in Optimize
-  moves the Dashboard's numbers, the nav's badges *and* the Analyze list; none of
+  moves the Dashboard's numbers, the nav's badges and the findings tree; none of
   those should be listed at the call site.
 - **Most panels don't subscribe at all.** Text bound with `Text_Lambda` re-reads
   the model every tick, so the Dashboard and the header are automatically live.
-  Only the two `SFindingTree`s subscribe, because an `STreeView` has to be told to
+  Only `SOptimizePanel` subscribes for its `SFindingTree`, because an `STreeView` has to be told to
   rebuild. If you add a panel, prefer a bound lambda; subscribe only if you cache.
 - **Panels that subscribe must unsubscribe in their destructor** — the model
   outlives them.
-- Filters live here, not in Analyze's toolbar, because the nav's badges must count
-  what those filters would leave. Optimize takes the category narrowing but *not*
-  severity/search: that toolbar belongs to Analyze, and a fix list silently
-  narrowed from another screen would hide fixable work.
+- Filters live in the model, not in the Optimize widget, because the nav badges
+  and the tree must always describe the same visible result set.
 
 ### Version gating philosophy (important)
 
@@ -247,13 +250,13 @@ don't hand-roll a second tree.
 
 - **No `Opt` abbreviation.** Where a distinctive prefix is genuinely required —
   the global preprocessor macros — spell it out: `OPTIMIZATION_*`.
-- Types: `FFinding`, `FScanResult`, `ESeverity`, `ECategory`, `FAnalyzeThresholds`,
+- Types: `FFinding`, `FScanResult`, `ESeverity`, `ECategory`, `EFindingScope`, `FAnalyzeThresholds`,
   `FLevelScanContext`, `FLevelAnalyzer`, `FToolsetStyle`, `SToolsetWindow`,
   `EToolsetSection`, `FToolsetRegistry`. Feature classes: `F<Thing>Pass`, `F<Thing>Fix`,
   one per file, named after the class.
 - Finding `TypeId`s read `Domain.Problem`: `Mesh.MissingLODs`, `Texture.Oversized`,
   `Lighting.MovableLightOverBudget`. Fix ids read `Fix_Thing`; pass ids `Pass_Thing`.
-- `ESeverity`/`ECategory` are **plain enums, not UENUM** (no reflection needed
+- `ESeverity`/`ECategory`/`EFindingScope` are **plain enums, not UENUM** (no reflection needed
   yet). If a settings `UObject` later needs them as UPROPERTY, reintroduce `UENUM`
   and qualify to avoid a global-name clash: `EOptimizationSeverity` etc.
 - Slate style keys are prefixed `Toolset.*`.
@@ -277,14 +280,13 @@ don't hand-roll a second tree.
   end of a header whose title changes per section. Its style
   (`Toolset.Button.Scan`) exists only because `SButton` *adds* the style's
   `NormalPadding` to `ContentPadding` — a padding-free style lets the `SBox` decide
-  the size. Below it, icon + label rows. Analyze and Optimize list their
-  `ECategory` values underneath as sub-items with counts; picking one narrows that
-  panel to the category (`FToolsetModel::SetCategoryFilter`), and the section header itself means
+  the size. Below it, icon + label rows. Optimize lists every `ECategory` as a
+  sub-item with a count, including empty categories so thresholds can be edited
+  before scanning. Picking one narrows the panel (`FToolsetModel::SetCategoryFilter`), and the section header itself means
   "everything in here", so clicking it clears the narrowing. Clicking the section
   you're already in folds its list away — that keeps the arrow an indicator rather
   than a second hit target nested inside a button, which Slate handles badly.
-  Sub-items hide themselves when their category found nothing, so the menu never
-  offers a dead end. Icons are white SVGs
+  Icons are white SVGs
   (`Toolset.Icon.*`) tinted per state via `SImage.ColorAndOpacity` (teal when
   selected, grey otherwise). The **mascot** (`vera.png`, brush `Toolset.Mascot`)
   sits at the bottom in an `SScaleBox` (ScaleToFit, DownOnly) so it fills the space
@@ -299,15 +301,13 @@ don't hand-roll a second tree.
   excluded package names, copies the outgoing `LastScan.Stats` into
   `PreviousStats` (the Dashboard's delta baseline — the rescan after a fix is the
   case that matters), calls `FLevelAnalyzer::AnalyzeCurrentLevel(Excluded)`, rebuilds
-  `AllFindings` + `FixableFindings`, then broadcasts `OnChanged()`.
-- Apply flow: `FToolsetModel::ApplyFix()` / `ApplyAllFixes()` call
+  `AllFindings`, then broadcasts `OnChanged()`.
+- Apply flow: `FToolsetModel::ApplyFix()` calls
   `IOptimizationFix::Apply` then `RunScan()`, so the refresh is the scan's
-  broadcast — no panel refreshes another. `ApplyAllFixes` snapshots the list
-  first: the rescan rebuilds the very array it iterates.
+  broadcast — no panel refreshes another.
 - Filtering: the model applies filters; `SFindingTree::SetFindings()` regroups
-  whatever it is handed. `SAnalyzePanel`/`SOptimizePanel` sit between them,
-  pushing `GetVisibleFindings()` / `GetVisibleFixable()` into their tree on every
-  `OnChanged()`.
-- Grouping: `SFindingTree::BuildCategoryTree()` (a flat list in, category headers
-  out, as `FFindingNode`s). It re-expands every group afterwards, because the
+  whatever it is handed. `SOptimizePanel` pushes `GetVisibleFindings()` into its
+  tree on every `OnChanged()`.
+- Grouping: `SFindingTree::BuildProblemTree()` groups the flat list by stable
+  `FFinding::TypeId`. It re-expands every group afterwards, because the
   nodes are new objects each time and can't remember their own expansion.

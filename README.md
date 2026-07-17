@@ -32,7 +32,7 @@ Source/OptimizationToolsetEditor/
     OptimizationToolsetEditorModule.h   # module entry (stays at root)
     Toolset/
       ToolsetCompat.h     # engine-version feature gates (OPTIMIZATION_* macros)
-      ToolsetTypes.h      # ESeverity / ECategory enums, FFinding, FScanResult
+      ToolsetTypes.h      # ESeverity / ECategory / EFindingScope, FFinding, FScanResult
       LevelAnalyzer.h     # read-only level analysis (FLevelAnalyzer)
       ToolsetStyle.h      # palette, rounded-card brushes, text styles (FToolsetStyle)
       SToolsetWindow.h    # main dockable panel (SToolsetWindow)
@@ -54,19 +54,18 @@ genuinely required — the global preprocessor macros — the full word
 - **Dockable Slate window**: left nav rail, header with live **health score**
   gauge + **Scan Level** action, switched content area.
 - **Dashboard**: severity summary cards + workflow guide.
-- **Analyze** *(functional)*: real read-only passes — non-Nanite excessive
-  triangles, Nanite candidates, missing LODs, per-poly collision on props, too
-  many movable lights. Search + severity filters, **Focus** button frames the
-  offending actor in the viewport.
+- **Optimize** *(functional unified workspace)*: category thresholds above a
+  problem-type tree, search + severity filters, and Analyze-style finding cards.
+  Scope-aware navigation uses **Show in Content**, **Focus Actor**, or **Open Settings**; a second
+  **Apply** button appears when a safe transactional auto-fix exists. The card's
+  performance rationale is available on hover.
 - **Profile** *(functional)*: one-click `stat` command stacks (fps / unit / gpu
   / scenerendering / rhi / initviews / streaming / profilegpu / clear).
-- **Optimize / Cleanup / Reports**: designed placeholder panels listing the
-  planned actions, wired into navigation and ready to fill in.
+- **Cleanup** *(functional)*: project-size measurement and guarded maintenance
+  actions. **Reports** remains a designed placeholder.
 
 ## Next up (roadmap)
 
-- Optimize: transactional batch fixes (Enable Nanite, Generate LODs, Light
-  mobility, Texture compression, ISM/HISM instancing, Simple collision).
-- Analyze: texture/material passes (oversized, non-pow2, slot count).
+- Optimize: expand the supported fix set and add optional batch previews.
 - Cleanup: project size breakdown, fix redirectors, delete unused, settings audit.
 - Reports: CSV/JSON export, before/after snapshots.

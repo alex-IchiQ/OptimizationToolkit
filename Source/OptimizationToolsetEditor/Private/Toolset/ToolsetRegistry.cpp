@@ -17,6 +17,7 @@
 #include "Toolset/Optimization/Fixes/GenerateLODsFix.h"
 #include "Toolset/Optimization/Fixes/SimpleCollisionFix.h"
 #include "Toolset/Optimization/Fixes/ReviewLightMobilityFix.h"
+#include "Toolset/Optimization/Fixes/DeleteEmptyMeshActorFix.h"
 #include "Toolset/Optimization/Fixes/ConvertToInstancesFix.h"
 #include "Toolset/Optimization/Fixes/TextureSettingsFixes.h"
 
@@ -52,6 +53,7 @@ void FToolsetRegistry::RegisterDefaults()
 	AddFix(MakeUnique<FGenerateLODsFix>());
 	AddFix(MakeUnique<FSimpleCollisionFix>());
 	AddFix(MakeUnique<FReviewLightMobilityFix>());
+	AddFix(MakeUnique<FDeleteEmptyMeshActorFix>());
 	AddFix(MakeUnique<FConvertToInstancesFix>());
 	AddFix(MakeUnique<FNormalmapCompressionFix>());
 	AddFix(MakeUnique<FDisableTextureSRGBFix>());

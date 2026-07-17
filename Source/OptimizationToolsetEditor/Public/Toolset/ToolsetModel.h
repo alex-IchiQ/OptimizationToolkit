@@ -16,7 +16,7 @@
  *
  * Views react through OnChanged() rather than being poked by whoever caused the
  * change: a fix applied in Optimize moves the Dashboard's numbers, the nav's
- * badges and the Analyze list, and none of those should have to be listed at the
+ * badges and the findings tree, and none of those should have to be listed at the
  * call site.
  *
  * Not a UObject and not exported: it is plain state, and MODULE_API on a class
@@ -31,6 +31,9 @@ public:
 	// ---- Scan ---------------------------------------------------------------
 	/** Re-analyzes the active level and rebuilds the derived lists. */
 	void RunScan();
+
+	/** Clears results when scan inputs change, preventing stale fixes. */
+	void InvalidateScan();
 
 	bool HasScanned() const { return bHasScanned; }
 	const FScanResult& GetLastScan() const { return LastScan; }
@@ -54,20 +57,11 @@ public:
 	/** Every finding of the last scan, shared so views can hold a row cheaply. */
 	const TArray<TSharedPtr<FFinding>>& GetAllFindings() const { return AllFindings; }
 
-	/** The subset with a registered, supported fix. Same objects as above. */
-	const TArray<TSharedPtr<FFinding>>& GetFixableFindings() const { return FixableFindings; }
-
-	/** All findings passing severity + search + category. Analyze's list. */
+	/** All findings passing severity + search + category. Optimize's list. */
 	TArray<TSharedPtr<FFinding>> GetVisibleFindings() const;
 
-	/**
-	 * Fixable findings passing the category narrowing only: the severity/search
-	 * toolbar belongs to Analyze, so Optimize must not silently inherit it.
-	 */
-	TArray<TSharedPtr<FFinding>> GetVisibleFixable() const;
-
 	/** How many rows a category would show; drives the nav badges. */
-	int32 CountForCategory(ECategory Category, bool bFixableOnly) const;
+	int32 CountForCategory(ECategory Category) const;
 
 	// ---- Filters ------------------------------------------------------------
 	void SetSearchFilter(const FString& InSearch);
@@ -87,11 +81,8 @@ public:
 	/** Applies one fix, then rescans so every view reflects the new truth. */
 	void ApplyFix(TSharedPtr<FFinding> Finding);
 
-	/** Applies every currently fixable finding, then rescans once. */
-	void ApplyAllFixes();
-
 private:
-	/** Rebuilds AllFindings/FixableFindings from LastScan and broadcasts. */
+	/** Rebuilds the shared findings from LastScan and broadcasts. */
 	void RebuildDerivedLists();
 
 	/** Resolves the per-level toggles into the package names the analyzer skips. */
@@ -104,8 +95,6 @@ private:
 	bool bHasPreviousStats = false;
 
 	TArray<TSharedPtr<FFinding>> AllFindings;
-	TArray<TSharedPtr<FFinding>> FixableFindings;
-
 	FString SearchFilter;
 	TSet<ESeverity> EnabledSeverities = { ESeverity::Critical, ESeverity::Major, ESeverity::Minor };
 	TOptional<ECategory> CategoryFilter;

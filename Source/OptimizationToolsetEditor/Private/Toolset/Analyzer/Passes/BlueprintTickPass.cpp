@@ -70,7 +70,7 @@ void FBlueprintTickPass::Run(const FLevelScanContext& Context, const FAnalyzeThr
 		// frame budget.
 		const ESeverity Severity = Entry.InstanceCount >= 10 ? ESeverity::Major : ESeverity::Minor;
 
-		FFinding F(TEXT("Blueprint.StaticActorTicksEveryFrame"), Severity, ECategory::Blueprints,
+		FFinding F(TEXT("Blueprint.StaticActorTicksEveryFrame"), Severity, ECategory::Blueprints, EFindingScope::Asset,
 			LOCTEXT("Title", "Static Blueprint actor ticks every frame"),
 			FText::Format(LOCTEXT("Subject", "{0} ({1} placed)"),
 				FText::FromString(Entry.BlueprintName), FText::AsNumber(Entry.InstanceCount)));
@@ -79,6 +79,7 @@ void FBlueprintTickPass::Run(const FLevelScanContext& Context, const FAnalyzeThr
 			FText::AsNumber(Entry.InstanceCount));
 		F.HowToFix = LOCTEXT("Fix", "Open the Blueprint, and in Class Defaults turn off Start with Tick Enabled or set a Tick Interval. This is a class setting: it affects every instance in every level.");
 		F.TargetActor = Entry.FirstInstance;
+		F.TargetAsset = Pair.Key->ClassGeneratedBy;
 		Out.Findings.Add(MoveTemp(F));
 	}
 }

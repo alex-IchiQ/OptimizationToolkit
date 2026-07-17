@@ -7,16 +7,12 @@
 #include "Widgets/SCompoundWidget.h"
 
 class FToolsetModel;
+class IDetailsView;
 class SFindingTree;
+struct FPropertyAndParent;
+struct FPropertyChangedEvent;
 
-/**
- * The findings that have a registered, supported fix — grouped the same way
- * Analyze groups them — with a per-row Apply and an Apply all.
- *
- * Deliberately does not inherit Analyze's severity/search toolbar: that toolbar
- * belongs to that panel, and a fix list silently narrowed by a filter set on
- * another screen would hide fixable work.
- */
+/** Unified workspace for configuring, reviewing, navigating to, and fixing findings. */
 class SOptimizePanel : public SCompoundWidget
 {
 public:
@@ -29,9 +25,25 @@ public:
 
 private:
 	void Refresh();
-	TSharedRef<SWidget> MakeFixCard(TSharedPtr<FFinding> Item);
+	TSharedRef<SWidget> BuildSettingsPanel();
+	TSharedRef<SWidget> MakeSeverityFilterButton(ESeverity Severity);
+	TSharedRef<SWidget> MakeFindingCard(TSharedPtr<FFinding> Item);
+
+	bool IsSettingVisible(const FPropertyAndParent& PropertyAndParent) const;
+	bool HasSettingsForSelectedCategory() const;
+	FText GetSettingsTitle() const;
+	FText GetNoSettingsText() const;
+	void OnSettingChanged(const FPropertyChangedEvent& PropertyChangedEvent);
+
+	static bool CanNavigateTo(const FFinding& Finding);
+	static FText GetScopeLabel(EFindingScope Scope);
+	static FText GetNavigationLabel(const FFinding& Finding);
+	static void NavigateTo(const FFinding& Finding);
+	static void OpenProjectRenderingSettings(FName FindingTypeId = NAME_None);
 
 	TSharedPtr<FToolsetModel> Model;
 	TSharedPtr<SFindingTree> Tree;
+	TSharedPtr<IDetailsView> SettingsView;
+	TOptional<ECategory> DisplayedSettingsCategory;
 	FDelegateHandle ChangedHandle;
 };
