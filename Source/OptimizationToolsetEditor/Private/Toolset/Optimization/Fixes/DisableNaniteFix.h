@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Toolset/Optimization/IOptimizationFix.h"
 
-/** Turns Nanite off for a low-poly static mesh. Resolves Fix_DisableNanite. */
+/** Turns Nanite off for a static mesh when a finding requests it. Resolves Fix_DisableNanite. */
 class FDisableNaniteFix : public IOptimizationFix
 {
 public:

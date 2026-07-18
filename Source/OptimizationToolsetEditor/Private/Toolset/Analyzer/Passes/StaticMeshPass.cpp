@@ -6,12 +6,64 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInterface.h"
 #include "PhysicsEngine/BodySetup.h"
 
 #define LOCTEXT_NAMESPACE "StaticMeshPass"
 
 void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresholds& T, FScanResult& Out) const
 {
+	TSet<const UStaticMesh*> NaniteMaterialIncompatibilities;
+
+#if OPTIMIZATION_HAS_NANITE
+	// Match the engine warning against each component's effective materials, not
+	// only the mesh defaults: a placed actor can introduce an incompatible
+	// translucent override. One finding per mesh is enough because the requested
+	// fix disables Nanite on that asset for every use.
+	for (AActor* Actor : Context.Actors)
+	{
+		TInlineComponentArray<UStaticMeshComponent*> Components(Actor);
+		for (UStaticMeshComponent* Component : Components)
+		{
+			UStaticMesh* Mesh = Component ? Component->GetStaticMesh() : nullptr;
+			if (!Mesh || !Mesh->IsNaniteEnabled() || Component->IsDisallowNanite()
+				|| NaniteMaterialIncompatibilities.Contains(Mesh))
+			{
+				continue;
+			}
+
+			const int32 MaterialCount = Component->GetNumMaterials();
+			for (int32 MaterialIndex = 0; MaterialIndex < MaterialCount; ++MaterialIndex)
+			{
+				UMaterialInterface* Material = Component->GetMaterial(MaterialIndex);
+				if (!Material)
+				{
+					continue;
+				}
+
+				const EBlendMode BlendMode = Material->GetBlendMode();
+				if (BlendMode == BLEND_Opaque || BlendMode == BLEND_Masked)
+				{
+					continue;
+				}
+
+				NaniteMaterialIncompatibilities.Add(Mesh);
+				FFinding F(TEXT("Mesh.NaniteUnsupportedMaterial"), ESeverity::Major, ECategory::Meshes, EFindingScope::Asset,
+					LOCTEXT("NaniteUnsupportedMaterialTitle", "Nanite mesh uses an unsupported material"),
+					FText::Format(LOCTEXT("NaniteUnsupportedMaterialSubject", "{0} — {1}"),
+						FText::FromString(Mesh->GetName()), FText::FromString(Material->GetName())));
+				F.WhyItMatters = LOCTEXT("NaniteUnsupportedMaterialWhy", "Nanite currently accepts only Opaque or Masked materials. Other blend modes force fallback rendering and repeatedly emit LogStaticMesh warnings.");
+				F.HowToFix = LOCTEXT("NaniteUnsupportedMaterialFix", "Disable Nanite on the mesh asset, or replace the material with an Opaque or Masked alternative.");
+				F.TargetActor = Actor;
+				F.TargetAsset = Mesh;
+				F.FixId = TEXT("Fix_DisableNanite");
+				Out.Findings.Add(MoveTemp(F));
+				break;
+			}
+		}
+	}
+#endif
+
 	// Every problem this pass reports (collision, LODs, Nanite, triangles) is a
 	// property of the mesh *asset*, not of the placed actor. De-dupe up front so
 	// a mesh shared by hundreds of actors yields one finding, not hundreds.
@@ -105,7 +157,8 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 		// --- Nanite overhead on tiny geometry can outweigh the work it removes.
 		// This stays a Minor review item: very high instance counts or a deliberate
 		// all-Nanite content pipeline can still make the setting reasonable.
-		if (bNanite && T.NaniteMinimumTriangles > 0 && NumTris <= T.NaniteMinimumTriangles)
+		if (bNanite && !NaniteMaterialIncompatibilities.Contains(Mesh)
+			&& T.NaniteMinimumTriangles > 0 && NumTris <= T.NaniteMinimumTriangles)
 		{
 			FFinding F(TEXT("Mesh.LowPolyNanite"), ESeverity::Minor, ECategory::Meshes, EFindingScope::Asset,
 				LOCTEXT("LowPolyNaniteTitle", "Nanite enabled on a low-poly mesh"), Subject);

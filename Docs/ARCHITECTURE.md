@@ -47,8 +47,13 @@ Private/Toolset/
   ToolsetStyle.cpp
   ToolsetWidgetUtils.h S() / Brush() shorthand, header-only, used by every panel
   SToolsetWindow.cpp
+  Navigation/
+    FindingNavigator   Routes finding actions to Content Browser, viewport,
+                       Project Settings, or a rescan
   Panels/              one file per panel, like Passes/ and Fixes/:
                        SFindingTree (findings grouped by problem TypeId),
+                       SFindingCard (one finding's presentation and actions),
+                       SCategorySettingsPanel (category threshold details),
                        SDashboardPanel, SOptimizePanel,
                        SCleanupPanel, SProfilePanel, SPlaceholderPanel
   Analyzer/
@@ -61,6 +66,7 @@ Private/Toolset/
     Fixes/             one file per fix: EnableNaniteFix, DisableNaniteFix,
                        GenerateLODsFix,
                        SimpleCollisionFix, ReviewLightMobilityFix,
+                       DeleteEmptyMeshActorFix,
                        ConvertToInstancesFix, TextureSettingsFixes (two fixes:
                        normal map compression + data texture sRGB)
                        + FixUtils.h (shared MeshFromFinding helper)
@@ -167,8 +173,8 @@ write separate per-version strategy classes — only one ever compiles. Instead:
 2. Implement `Run` in the matching `.cpp` — iterate `Context.Actors` (or a
    pre-bucketed array like `Context.StaticMeshActors`), build `FFinding`s and
    `Out.Findings.Add(...)`. Each finding takes a stable `TypeId` first, then
-   Severity, Category, Title, Subject; then set WhyItMatters, HowToFix,
-   TargetActor, and a `FixId` if a fix exists. Keep pass-local helpers in that
+   Severity, Category, Scope, Title, Subject; then set WhyItMatters, HowToFix,
+   TargetActor/TargetAsset as required by that scope, and a `FixId` if a fix exists. Keep pass-local helpers in that
    file's anonymous namespace. It must be **read-only**.
 3. Register it: add `AddPass(MakeUnique<FFoliagePass>());` in
    `FToolsetRegistry::RegisterDefaults()` (`ToolsetRegistry.cpp`).
@@ -311,3 +317,7 @@ don't hand-roll a second tree.
 - Grouping: `SFindingTree::BuildProblemTree()` groups the flat list by stable
   `FFinding::TypeId`. It re-expands every group afterwards, because the
   nodes are new objects each time and can't remember their own expansion.
+- Finding presentation stays in `SFindingCard`; `SOptimizePanel` only composes
+  filters, category settings, and the tree. `FFindingNavigator` owns every editor
+  integration behind a card's primary action, keeping Content Browser and
+  Project Settings API details out of Slate presentation code.

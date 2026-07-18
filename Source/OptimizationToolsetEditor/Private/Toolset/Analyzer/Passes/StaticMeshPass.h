@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Toolset/Analyzer/IAnalyzePass.h"
 
-/** Static-mesh hygiene: excessive triangles, Nanite candidates, missing LODs, per-poly collision. */
+/** Static-mesh hygiene: triangles, Nanite/material compatibility, LODs, and collision. */
 class FStaticMeshPass : public IAnalyzePass
 {
 public:
