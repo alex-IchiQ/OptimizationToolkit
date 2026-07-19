@@ -8,11 +8,14 @@
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Editor.h"
 #include "GameMapsSettings.h"
+#include "Misc/MessageDialog.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopedSlowTask.h"
 #include "Modules/ModuleManager.h"
 #include "ObjectTools.h"
+#include "Toolset/Cleanup/ICleanupAction.h"
+#include "Toolset/ToolsetRegistry.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
 #include "Styling/StyleColors.h"
@@ -118,6 +121,12 @@ void SCleanupView::Construct(const FArguments& InArgs)
 		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(6, 6, 6, 4))
 		[
 			SNew(STextBlock).Text(this, &SCleanupView::GetSummaryText)
+		]
+
+		// Project-wide actions (fix up redirectors, save dirty packages).
+		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(6, 0, 6, 4))
+		[
+			BuildActionBar()
 		]
 
 		// Filter bar: kind buttons + type combo.
@@ -569,6 +578,71 @@ TSharedRef<SWidget> SCleanupView::GenerateCell(const FName& ColumnId, TSharedPtr
 		.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
 		.Justification(Align == HAlign_Right ? ETextJustify::Right : ETextJustify::Left)
 	];
+}
+
+// ---------------------------------------------------------------------------
+// Project-wide actions
+// ---------------------------------------------------------------------------
+TSharedRef<SWidget> SCleanupView::BuildActionBar()
+{
+	TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox);
+
+	// Registry-driven, minus Delete Unused — this page does its own delete.
+	for (const TUniquePtr<ICleanupAction>& Action : FToolsetRegistry::Get().GetActions())
+	{
+		if (!Action || !Action->IsSupported() || Action->GetId() == TEXT("Cleanup_DeleteUnusedAssets"))
+		{
+			continue;
+		}
+
+		const ICleanupAction* ActionPtr = Action.Get();	// registry owns it; outlives the button
+		Row->AddSlot().AutoWidth().Padding(FMargin(0, 0, 4, 0))
+		[
+			SNew(SButton)
+			.ToolTipText(Action->GetDescription())
+			.OnClicked(this, &SCleanupView::OnRunAction, ActionPtr)
+			[
+				SNew(STextBlock).Text(Action->GetButtonLabel())
+			]
+		];
+	}
+
+	// Last-run summary, so a fire-and-forget action still reports what it did.
+	Row->AddSlot().FillWidth(1.0f).VAlign(VAlign_Center).Padding(FMargin(10, 0, 0, 0))
+	[
+		SNew(STextBlock)
+		.Text_Lambda([this]() { return LastActionResult; })
+		.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+		.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
+	];
+
+	return Row;
+}
+
+FReply SCleanupView::OnRunAction(const ICleanupAction* Action)
+{
+	if (!Action)
+	{
+		return FReply::Handled();
+	}
+
+	// Anything that rewrites assets confirms first, unless it runs its own review.
+	if (Action->NeedsConfirmation())
+	{
+		const FText Message = FText::Format(
+			LOCTEXT("ConfirmAction", "{0}\n\n{1}\n\nThis cannot be undone. Continue?"),
+			Action->GetTitle(), Action->GetDescription());
+		if (FMessageDialog::Open(EAppMsgType::YesNo, Message) != EAppReturnType::Yes)
+		{
+			return FReply::Handled();
+		}
+	}
+
+	FScopedSlowTask SlowTask(0.0f, Action->GetTitle());
+	SlowTask.MakeDialog();
+
+	LastActionResult = Action->Execute();
+	return FReply::Handled();
 }
 
 // ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@
 #include "Widgets/Views/SListView.h"
 
 class SHeaderRow;
+class ICleanupAction;
 template <typename T> class SComboBox;
 
 /** Why an asset is on the cleanup list. */
@@ -95,7 +96,12 @@ private:
 
 	FText GetSummaryText() const;
 
+	// ---- Project-wide actions (registry-driven) -----------------------------
+	TSharedRef<SWidget> BuildActionBar();
+	FReply OnRunAction(const ICleanupAction* Action);
+
 	bool bHasScanned = false;
+	FText LastActionResult;
 
 	TArray<TSharedPtr<FCleanupEntry>> AllEntries;
 	TArray<TSharedPtr<FCleanupEntry>> VisibleEntries;
