@@ -102,6 +102,9 @@ public:
 	void Construct(const FArguments& InArgs);
 	virtual ~SOptimizeView() override;
 
+	/** Re-analyzes the level. Driven by the shell's single Scan action. */
+	void Scan();
+
 private:
 	// ---- Data ---------------------------------------------------------------
 	void Refresh();
@@ -128,7 +131,6 @@ private:
 	void OnItemCheckChanged(ECheckBoxState State, TSharedPtr<FAffectedNode> Node);
 
 	// ---- Actions ------------------------------------------------------------
-	FReply OnScanClicked();
 	FReply OnApplyClicked();
 	bool IsApplyEnabled() const;
 	int32 CheckedFixableCount() const;

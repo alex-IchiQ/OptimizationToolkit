@@ -280,26 +280,12 @@ void SOptimizeView::Construct(const FArguments& InArgs)
 	[
 		SNew(SVerticalBox)
 
-		// Top bar: scan + live summary.
+		// Top bar: live summary (the Scan action lives in the shell now).
 		+ SVerticalBox::Slot()
 		.AutoHeight()
-		.Padding(6.0f)
+		.Padding(FMargin(6, 6, 6, 4))
 		[
-			SNew(SHorizontalBox)
-
-			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
-			[
-				SNew(SButton)
-				.OnClicked(this, &SOptimizeView::OnScanClicked)
-				[
-					SNew(STextBlock).Text(LOCTEXT("Scan", "Scan Level"))
-				]
-			]
-
-			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center).Padding(FMargin(12, 0, 0, 0))
-			[
-				SNew(STextBlock).Text(this, &SOptimizeView::GetSummaryText)
-			]
+			SNew(STextBlock).Text(this, &SOptimizeView::GetSummaryText)
 		]
 
 		+ SVerticalBox::Slot().AutoHeight()[ SNew(SSeparator) ]
@@ -954,13 +940,12 @@ void SOptimizeView::OnItemCheckChanged(ECheckBoxState State, TSharedPtr<FAffecte
 // ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
-FReply SOptimizeView::OnScanClicked()
+void SOptimizeView::Scan()
 {
 	if (Model.IsValid())
 	{
 		Model->RunScan();
 	}
-	return FReply::Handled();
 }
 
 int32 SOptimizeView::CheckedFixableCount() const

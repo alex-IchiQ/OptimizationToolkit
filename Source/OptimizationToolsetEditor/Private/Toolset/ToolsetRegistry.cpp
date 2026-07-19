@@ -57,6 +57,7 @@ void FToolsetRegistry::RegisterDefaults()
 	AddFix(MakeUnique<FConvertToInstancesFix>());
 	AddFix(MakeUnique<FNormalmapCompressionFix>());
 	AddFix(MakeUnique<FDisableTextureSRGBFix>());
+	AddFix(MakeUnique<FEnableStreamingFix>());
 
 	AddAction(MakeUnique<FSaveDirtyPackagesAction>());
 	AddAction(MakeUnique<FFixUpRedirectorsAction>());

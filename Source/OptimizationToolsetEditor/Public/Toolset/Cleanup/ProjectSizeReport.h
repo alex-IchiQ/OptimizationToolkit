@@ -59,4 +59,7 @@ struct FProjectSizeReport
 
 	/** Display name for a category, e.g. "Skeletal meshes". */
 	static FText LabelForCategory(EAssetCategory Category);
+
+	/** Buckets an asset class name into its category (Other for anything unlisted). */
+	static EAssetCategory CategoryForClass(FName ClassName);
 };

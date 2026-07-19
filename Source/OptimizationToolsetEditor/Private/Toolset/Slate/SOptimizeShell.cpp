@@ -1,7 +1,9 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "Toolset/Slate/SOptimizeShell.h"
+#include "Toolset/Slate/SAnalyzerView.h"
 #include "Toolset/Slate/SCleanupView.h"
+#include "Toolset/Slate/SDashboardView.h"
 #include "Toolset/Slate/SOptimizeView.h"
 #include "Toolset/Slate/SProfileView.h"
 
@@ -43,10 +45,11 @@ void SOptimizeShell::Construct(const FArguments& InArgs)
 		[
 			SAssignNew(Switcher, SWidgetSwitcher)
 
-			+ SWidgetSwitcher::Slot()[ BuildDashboardPlaceholder() ]   // Dashboard
-			+ SWidgetSwitcher::Slot()[ SNew(SOptimizeView) ]           // Optimize
-			+ SWidgetSwitcher::Slot()[ SNew(SProfileView) ]            // Profile
-			+ SWidgetSwitcher::Slot()[ SNew(SCleanupView) ]            // Cleanup
+			+ SWidgetSwitcher::Slot()[ SAssignNew(DashboardView, SDashboardView) ] // Dashboard
+			+ SWidgetSwitcher::Slot()[ SAssignNew(OptimizeView, SOptimizeView) ]  // Optimize
+			+ SWidgetSwitcher::Slot()[ SAssignNew(AnalyzerView, SAnalyzerView) ]  // Analyzer
+			+ SWidgetSwitcher::Slot()[ SNew(SProfileView) ]                      // Profile
+			+ SWidgetSwitcher::Slot()[ SAssignNew(CleanupView, SCleanupView) ]    // Cleanup
 		]
 	];
 
@@ -64,8 +67,23 @@ TSharedRef<SWidget> SOptimizeShell::BuildNav()
 			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
 		]
 
+		// One Scan runs both the level analysis and the project sweep, so the pages
+		// never carry their own scan buttons.
+		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 10))
+		[
+			SNew(SButton)
+			.HAlign(HAlign_Center)
+			.ContentPadding(FMargin(8, 6))
+			.ToolTipText(LOCTEXT("ScanTip", "Analyze the level and sweep the project."))
+			.OnClicked(this, &SOptimizeShell::OnScanClicked)
+			[
+				SNew(STextBlock).Text(LOCTEXT("Scan", "Scan"))
+			]
+		]
+
 		+ SVerticalBox::Slot().AutoHeight()[ MakeNavButton(EOptimizeSection::Dashboard, LOCTEXT("NavDashboard", "Dashboard")) ]
 		+ SVerticalBox::Slot().AutoHeight()[ MakeNavButton(EOptimizeSection::Optimize, LOCTEXT("NavOptimize", "Optimize")) ]
+		+ SVerticalBox::Slot().AutoHeight()[ MakeNavButton(EOptimizeSection::Analyzer, LOCTEXT("NavAnalyzer", "Analyzer")) ]
 		+ SVerticalBox::Slot().AutoHeight()[ MakeNavButton(EOptimizeSection::Profile, LOCTEXT("NavProfile", "Profile")) ]
 		+ SVerticalBox::Slot().AutoHeight()[ MakeNavButton(EOptimizeSection::Cleanup, LOCTEXT("NavCleanup", "Clean Up")) ];
 }
@@ -92,18 +110,6 @@ TSharedRef<SWidget> SOptimizeShell::MakeNavButton(EOptimizeSection Section, cons
 		];
 }
 
-TSharedRef<SWidget> SOptimizeShell::BuildDashboardPlaceholder()
-{
-	return SNew(SBox)
-		.HAlign(HAlign_Center)
-		.VAlign(VAlign_Center)
-		[
-			SNew(STextBlock)
-			.Text(LOCTEXT("DashboardSoon", "Dashboard"))
-			.ColorAndOpacity(FSlateColor::UseSubduedForeground())
-		];
-}
-
 void SOptimizeShell::SelectSection(EOptimizeSection Section)
 {
 	Current = Section;
@@ -111,6 +117,28 @@ void SOptimizeShell::SelectSection(EOptimizeSection Section)
 	{
 		Switcher->SetActiveWidgetIndex(static_cast<int32>(Section));
 	}
+}
+
+FReply SOptimizeShell::OnScanClicked()
+{
+	// Level analysis first (cheap), then the project-wide walks.
+	if (OptimizeView.IsValid())
+	{
+		OptimizeView->Scan();
+	}
+	if (DashboardView.IsValid())
+	{
+		DashboardView->Scan();
+	}
+	if (AnalyzerView.IsValid())
+	{
+		AnalyzerView->Scan();
+	}
+	if (CleanupView.IsValid())
+	{
+		CleanupView->Scan();
+	}
+	return FReply::Handled();
 }
 
 #undef LOCTEXT_NAMESPACE

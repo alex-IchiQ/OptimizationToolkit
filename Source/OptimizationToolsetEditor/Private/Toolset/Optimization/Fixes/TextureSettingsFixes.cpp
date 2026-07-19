@@ -80,4 +80,33 @@ bool FDisableTextureSRGBFix::Apply(const FFinding& Finding) const
 	return true;
 }
 
+// ---------------------------------------------------------------------------
+// Enable streaming
+// ---------------------------------------------------------------------------
+FText FEnableStreamingFix::GetLabel() const
+{
+	return LOCTEXT("StreamLabel", "Enable streaming");
+}
+
+bool FEnableStreamingFix::IsSupported() const
+{
+	return GEditor != nullptr;
+}
+
+bool FEnableStreamingFix::Apply(const FFinding& Finding) const
+{
+	UTexture2D* Texture = TextureFromFinding(Finding);
+	if (!Texture || !Texture->NeverStream)
+	{
+		return false;
+	}
+
+	const FScopedTransaction Transaction(LOCTEXT("StreamTx", "Enable texture streaming"));
+	Texture->Modify();
+	Texture->NeverStream = false;
+	Texture->PostEditChange();		// rebuilds the texture's streaming state
+	Texture->MarkPackageDirty();
+	return true;
+}
+
 #undef LOCTEXT_NAMESPACE
