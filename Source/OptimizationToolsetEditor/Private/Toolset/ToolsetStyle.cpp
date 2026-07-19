@@ -117,6 +117,23 @@ TSharedRef<FSlateStyleSet> FToolsetStyle::Create()
 		Style->Set("Toolset.TableRow", Row);
 	}
 
+	// A plain list row: transparent so the rounded backdrop shows, but with a faint
+	// hover so each row still feels interactive. For classic settings-style lists
+	// (the level scope) where the row itself is the control, not a card.
+	{
+		FTableRowStyle Row = FAppStyle::Get().GetWidgetStyle<FTableRowStyle>("TableView.Row");
+		const FSlateBrush Hover = FSlateRoundedBoxBrush(FLinearColor(1, 1, 1, 0.05f), 6.0f);
+		Row.SetEvenRowBackgroundBrush(FSlateNoResource());
+		Row.SetOddRowBackgroundBrush(FSlateNoResource());
+		Row.SetEvenRowBackgroundHoveredBrush(Hover);
+		Row.SetOddRowBackgroundHoveredBrush(Hover);
+		Row.SetActiveBrush(FSlateNoResource());
+		Row.SetActiveHoveredBrush(Hover);
+		Row.SetInactiveBrush(FSlateNoResource());
+		Row.SetInactiveHoveredBrush(Hover);
+		Style->Set("Toolset.TableRow.List", Row);
+	}
+
 	// Pills / chips.
 	Style->Set("Toolset.Pill",        new FSlateRoundedBoxBrush(FLinearColor(1, 1, 1, 0.06f), 10.0f));
 	Style->Set("Toolset.Pill.Accent", new FSlateRoundedBoxBrush(AccentDim, 10.0f));
@@ -169,6 +186,24 @@ TSharedRef<FSlateStyleSet> FToolsetStyle::Create()
 		ScanButton.SetNormalPadding(FMargin(0));
 		ScanButton.SetPressedPadding(FMargin(0));
 		Style->Set("Toolset.Button.Scan", ScanButton);
+	}
+
+	// Numeric threshold entry, for the category settings rows. Stock SSpinBox is
+	// pale and boxy; this gives it the card-inner surface and the teal fill so it
+	// reads as part of the panel rather than a form field dropped onto it.
+	{
+		FSpinBoxStyle SpinBox;
+		SpinBox.SetBackgroundBrush(FSlateRoundedBoxBrush(SurfacePanel, 6.0f, FLinearColor(FColor(0x3D, 0x42, 0x4A)), 1.0f));
+		SpinBox.SetActiveBackgroundBrush(FSlateRoundedBoxBrush(SurfacePanel, 6.0f, FLinearColor(Accent.R, Accent.G, Accent.B, 0.6f), 1.0f));
+		SpinBox.SetHoveredBackgroundBrush(FSlateRoundedBoxBrush(SurfaceCardHover, 6.0f, FLinearColor(FColor(0x47, 0x4D, 0x55)), 1.0f));
+		// The drag-fill portion of the slider, in accent.
+		SpinBox.SetActiveFillBrush(FSlateRoundedBoxBrush(FLinearColor(Accent.R, Accent.G, Accent.B, 0.28f), 6.0f));
+		SpinBox.SetHoveredFillBrush(FSlateRoundedBoxBrush(FLinearColor(Accent.R, Accent.G, Accent.B, 0.20f), 6.0f));
+		SpinBox.SetInactiveFillBrush(FSlateRoundedBoxBrush(FLinearColor(1, 1, 1, 0.0f), 6.0f));
+		SpinBox.SetArrowsImage(FSlateNoResource());	// cleaner without the tiny up/down chevrons
+		SpinBox.SetForegroundColor(FSlateColor(TextPrimary));
+		SpinBox.SetTextPadding(FMargin(8, 4));
+		Style->Set("Toolset.SpinBox", SpinBox);
 	}
 
 	// Ghost / secondary button.

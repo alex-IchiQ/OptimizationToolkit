@@ -7,26 +7,41 @@
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/Views/STreeView.h"
 
+/** What a tree row is: a problem-type header, a level header under one, or a leaf. */
+enum class EFindingNodeKind : uint8
+{
+	Problem,
+	Level,
+	Finding,
+};
+
 /**
- * One row in a finding tree: either a problem-type header or a finding under one.
+ * One row in a finding tree.
  *
  * With nine passes reporting, a flat list buries a critical mesh problem among
- * thirty texture notes. Grouping by ECategory means a user can collapse what they
- * are not working on right now.
+ * thirty texture notes. The top tier groups by stable problem type. When one
+ * problem repeats across several loaded sub-levels — 79 over-budget lights spread
+ * across a streamed map — a middle tier groups those by level, so a whole level's
+ * worth of one problem folds away in a click. That tier only appears when it earns
+ * its keep: a problem confined to one level stays a flat list.
  */
 struct FFindingNode
 {
+	EFindingNodeKind Kind = EFindingNodeKind::Problem;
+
 	FName TypeId = NAME_None;
+
+	/** Problem title on a problem header; level name on a level header. */
 	FText GroupTitle;
 	ECategory Category = ECategory::Meshes;
 
-	/** Null on a problem-type header; set on a leaf. */
+	/** Null on a header; set on a leaf. */
 	TSharedPtr<FFinding> Finding;
 
-	/** Only populated on a problem-type header. */
+	/** Child rows on a header. */
 	TArray<TSharedPtr<FFindingNode>> Children;
 
-	bool IsGroup() const { return !Finding.IsValid(); }
+	bool IsGroup() const { return Kind != EFindingNodeKind::Finding; }
 };
 
 /** Builds the card a leaf row shows. */
@@ -51,9 +66,10 @@ public:
 private:
 	TSharedRef<ITableRow> OnGenerateRow(TSharedPtr<FFindingNode> Node, const TSharedRef<STableViewBase>& OwnerTable);
 	void OnGetChildren(TSharedPtr<FFindingNode> Node, TArray<TSharedPtr<FFindingNode>>& OutChildren);
-	TSharedRef<SWidget> MakeGroupHeader(TSharedPtr<FFindingNode> Node);
+	TSharedRef<SWidget> MakeProblemHeader(TSharedPtr<FFindingNode> Node);
+	TSharedRef<SWidget> MakeLevelHeader(TSharedPtr<FFindingNode> Node);
 
-	/** Groups findings under stable problem type ids. */
+	/** Groups findings by problem type, then by level within a type when it spans several. */
 	static void BuildProblemTree(const TArray<TSharedPtr<FFinding>>& Source, TArray<TSharedPtr<FFindingNode>>& OutTree);
 
 	FOnMakeFindingCard OnMakeCard;

@@ -297,6 +297,21 @@ don't hand-roll a second tree.
   selected, grey otherwise). The **mascot** (`vera.png`, brush `Toolset.Mascot`)
   sits at the bottom in an `SScaleBox` (ScaleToFit, DownOnly) so it fills the space
   without overlapping the nav.
+- **No stock editor controls in the content area.** The engine's checkbox,
+  spin box and `IDetailsView` each arrive in their own visual language and can't be
+  themed to match, so the toolset renders its own:
+  - `SToolsetToggle` (`Panels/SToolsetToggle.*`) — a pill switch: a rounded track
+    (accent on / grey off) with a knob slid between two `SHorizontalBox` spacers
+    whose fill weights swap with state. State is a bound `IsChecked` attribute, so
+    it fronts the model without holding any of its own — used for the level-scope
+    rows and every bool setting.
+  - `Toolset.SpinBox` — an `FSpinBoxStyle` on the card-inner surface with a teal
+    drag fill and the up/down chevrons removed. Used by the category settings.
+  - `SCategorySettingsPanel` builds its rows from **reflection**: it iterates the
+    selected category's `UPROPERTY`s (`Category` metadata → finding category),
+    renders each `FIntProperty` as a `Toolset.SpinBox` honouring its
+    Clamp/UI min-max, each `FBoolProperty` as an `SToolsetToggle`, and writes back
+    through the property onto the settings CDO. No `PropertyEditor` dependency.
 
 ## Where things are wired
 

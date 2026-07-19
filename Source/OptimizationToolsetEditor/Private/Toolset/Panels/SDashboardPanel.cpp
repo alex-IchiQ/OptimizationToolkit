@@ -1,6 +1,7 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "Toolset/Panels/SDashboardPanel.h"
+#include "Toolset/Panels/SToolsetToggle.h"
 #include "Toolset/ToolsetModel.h"
 #include "Toolset/ToolsetWidgetUtils.h"
 
@@ -8,10 +9,10 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "Misc/PackageName.h"
+#include "Styling/SlateTypes.h"
 
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Input/SButton.h"
-#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
@@ -167,51 +168,59 @@ TSharedRef<ITableRow> SDashboardPanel::GenerateLevelRow(
 	TSharedPtr<FDashboardLevelItem> Item,
 	const TSharedRef<STableViewBase>& OwnerTable)
 {
+	// The persistent level is where the persistent-level toggle is always on and
+	// its scope isn't really a choice; it reads as the header of the group, so it
+	// gets the accent label while sub-levels stay neutral.
+	const bool bPersistent = Item.IsValid() && Item->bPersistentLevel;
+
+	// A plain list row on the tree's one rounded backdrop, not a card per row: the
+	// row itself is the control. A faint hover comes from the row style.
 	return SNew(STableRow<TSharedPtr<FDashboardLevelItem>>, OwnerTable)
-		.Padding(FMargin(4, 3))
+		.Style(&S(), "Toolset.TableRow.List")
+		.Padding(FMargin(12, 6))
 		[
 			SNew(SHorizontalBox)
-
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			.VAlign(VAlign_Center)
-			.Padding(FMargin(0, 0, 10, 0))
-			[
-				SNew(SCheckBox)
-				.IsChecked_Lambda([this, Item]()
-				{
-					return Model.IsValid() && Item.IsValid()
-						&& Model->IsLevelIncluded(Item->PackageName, Item->bPersistentLevel)
-						? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
-				})
-				.OnCheckStateChanged_Lambda([this, Item](ECheckBoxState State)
-				{
-					if (Model.IsValid() && Item.IsValid())
-					{
-						Model->SetLevelIncluded(Item->PackageName, State == ECheckBoxState::Checked);
-					}
-				})
-			]
 
 			+ SHorizontalBox::Slot()
 			.FillWidth(1.0f)
 			.VAlign(VAlign_Center)
 			[
 				SNew(STextBlock)
-				.TextStyle(&S(), "Toolset.Text.Body")
+				.TextStyle(&S(), bPersistent ? "Toolset.Text.Heading" : "Toolset.Text.Body")
 				.Text(Item.IsValid() ? Item->Label : FText::GetEmpty())
+				.ColorAndOpacity(bPersistent
+					? FSlateColor(FToolsetStyle::Accent) : FSlateColor(FToolsetStyle::TextPrimary))
 			]
 
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
 			.VAlign(VAlign_Center)
-			.Padding(FMargin(10, 0, 0, 0))
+			.Padding(FMargin(10, 0, 14, 0))
 			[
 				SNew(STextBlock)
 				.TextStyle(&S(), "Toolset.Text.Subtle")
 				.Text(Item.IsValid()
 					? FText::Format(LOCTEXT("LevelActorCount", "{0} actors"), FText::AsNumber(Item->ActorCount))
 					: FText::GetEmpty())
+			]
+
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			[
+				SNew(SToolsetToggle)
+				.IsChecked_Lambda([this, Item]()
+				{
+					return Model.IsValid() && Item.IsValid()
+						&& Model->IsLevelIncluded(Item->PackageName, Item->bPersistentLevel);
+				})
+				.OnToggled_Lambda([this, Item](bool bIncluded)
+				{
+					if (Model.IsValid() && Item.IsValid())
+					{
+						Model->SetLevelIncluded(Item->PackageName, bIncluded);
+					}
+				})
 			]
 		];
 }
@@ -265,6 +274,7 @@ TSharedRef<SWidget> SDashboardPanel::BuildLevelScopeCard()
 				.HeightOverride(180.0f)
 				[
 					SAssignNew(LevelTree, STreeView<TSharedPtr<FDashboardLevelItem>>)
+					.TreeViewStyle(&S().GetWidgetStyle<FTableViewStyle>("Toolset.TreeView"))
 					.TreeItemsSource(&LevelRoots)
 					.SelectionMode(ESelectionMode::None)
 					.OnGenerateRow(this, &SDashboardPanel::GenerateLevelRow)

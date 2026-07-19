@@ -81,6 +81,9 @@ public:
 	/** Applies one fix, then rescans so every view reflects the new truth. */
 	void ApplyFix(TSharedPtr<FFinding> Finding);
 
+	/** Applies the fixes for a selection of findings, then rescans once. */
+	void ApplyFixes(const TArray<TSharedPtr<FFinding>>& Findings);
+
 private:
 	/** Rebuilds the shared findings from LastScan and broadcasts. */
 	void RebuildDerivedLists();
