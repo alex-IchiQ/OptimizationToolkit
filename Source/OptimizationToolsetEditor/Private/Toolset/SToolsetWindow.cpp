@@ -476,7 +476,6 @@ TSharedRef<SWidget> SToolsetWindow::BuildHeader()
 TSharedRef<SWidget> SToolsetWindow::BuildContent()
 {
 	TArray<FText> ReportActions = {
-		LOCTEXT("RepAct1", "Export findings to CSV / JSON"),
 		LOCTEXT("RepAct2", "Before / after snapshots to prove wins"),
 		LOCTEXT("RepAct3", "Per-category summary for milestone reviews"),
 	};

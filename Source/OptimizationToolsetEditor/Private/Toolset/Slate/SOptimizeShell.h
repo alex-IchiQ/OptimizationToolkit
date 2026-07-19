@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Widgets/SCompoundWidget.h"
 
+class FToolsetModel;
 class SWidgetSwitcher;
 class SDashboardView;
 class SOptimizeView;
@@ -48,6 +49,14 @@ private:
 	FReply OnScanClicked();
 
 	EOptimizeSection Current = EOptimizeSection::Optimize;
+
+	/**
+	 * The one model the whole new UI shares. Dashboard and Optimize both read the
+	 * same scan, and the Dashboard's level-scope toggles drive the next RunScan —
+	 * so it has to be the same instance, not one per view.
+	 */
+	TSharedPtr<FToolsetModel> Model;
+
 	TSharedPtr<SWidgetSwitcher> Switcher;
 	TSharedPtr<SDashboardView> DashboardView;
 	TSharedPtr<SOptimizeView> OptimizeView;

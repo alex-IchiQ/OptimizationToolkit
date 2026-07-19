@@ -273,7 +273,7 @@ int32 FOptimizeNode::LeafCount() const
 
 void SOptimizeView::Construct(const FArguments& InArgs)
 {
-	Model = MakeShared<FToolsetModel>();
+	Model = InArgs._Model.IsValid() ? InArgs._Model : MakeShared<FToolsetModel>();
 	ChangedHandle = Model->OnChanged().AddSP(this, &SOptimizeView::Refresh);
 
 	ChildSlot

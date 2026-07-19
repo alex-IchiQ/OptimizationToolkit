@@ -81,9 +81,10 @@ FMemoryReport FMemoryReport::Compute(int32 TopN)
 	Report.TexturePoolSize = FMath::Max<int64>(RHIStats.TexturePoolSize, 0);
 	Report.StreamingPoolUsed = static_cast<int64>(RHIStats.StreamingMemorySize);
 
-	if (IStreamingManager::Get_Concurrent())
+	if (FStreamingManagerCollection* StreamingManagers = IStreamingManager::Get_Concurrent();
+		StreamingManagers && StreamingManagers->IsTextureStreamingEnabled())
 	{
-		IRenderAssetStreamingManager& Streamer = IStreamingManager::Get().GetTextureStreamingManager();
+		IRenderAssetStreamingManager& Streamer = StreamingManagers->GetTextureStreamingManager();
 		Report.StreamingPoolBudget = Streamer.GetPoolSize();
 		Report.StreamingOverBudget = FMath::Max<int64>(Streamer.GetMemoryOverBudget(), 0);
 	}

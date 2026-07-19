@@ -6,6 +6,7 @@
 #include "Toolset/Slate/SDashboardView.h"
 #include "Toolset/Slate/SOptimizeView.h"
 #include "Toolset/Slate/SProfileView.h"
+#include "Toolset/ToolsetModel.h"
 
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
@@ -20,6 +21,8 @@
 
 void SOptimizeShell::Construct(const FArguments& InArgs)
 {
+	Model = MakeShared<FToolsetModel>();
+
 	ChildSlot
 	[
 		SNew(SHorizontalBox)
@@ -45,8 +48,8 @@ void SOptimizeShell::Construct(const FArguments& InArgs)
 		[
 			SAssignNew(Switcher, SWidgetSwitcher)
 
-			+ SWidgetSwitcher::Slot()[ SAssignNew(DashboardView, SDashboardView) ] // Dashboard
-			+ SWidgetSwitcher::Slot()[ SAssignNew(OptimizeView, SOptimizeView) ]  // Optimize
+			+ SWidgetSwitcher::Slot()[ SAssignNew(DashboardView, SDashboardView).Model(Model) ] // Dashboard
+			+ SWidgetSwitcher::Slot()[ SAssignNew(OptimizeView, SOptimizeView).Model(Model) ]  // Optimize
 			+ SWidgetSwitcher::Slot()[ SAssignNew(AnalyzerView, SAnalyzerView) ]  // Analyzer
 			+ SWidgetSwitcher::Slot()[ SNew(SProfileView) ]                      // Profile
 			+ SWidgetSwitcher::Slot()[ SAssignNew(CleanupView, SCleanupView) ]    // Cleanup
@@ -121,11 +124,15 @@ void SOptimizeShell::SelectSection(EOptimizeSection Section)
 
 FReply SOptimizeShell::OnScanClicked()
 {
-	// Level analysis first (cheap), then the project-wide walks.
-	if (OptimizeView.IsValid())
+	// Level analysis first (cheap): one RunScan feeds both Optimize's findings tree
+	// and the Dashboard's severity counts through the shared model's OnChanged.
+	if (Model.IsValid())
 	{
-		OptimizeView->Scan();
+		Model->RunScan();
 	}
+
+	// Then the project-wide walks each view owns: the Dashboard's disk + memory
+	// reports, the Analyzer's memory tables, the Cleanup sweep.
 	if (DashboardView.IsValid())
 	{
 		DashboardView->Scan();

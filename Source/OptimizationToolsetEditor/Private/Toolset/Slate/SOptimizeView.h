@@ -97,6 +97,8 @@ class SOptimizeView : public SCompoundWidget
 {
 public:
 	SLATE_BEGIN_ARGS(SOptimizeView) {}
+		/** The shared model. Falls back to a private one if none is supplied. */
+		SLATE_ARGUMENT(TSharedPtr<FToolsetModel>, Model)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
