@@ -24,10 +24,6 @@
 	],
 	"Plugins": [
 		{
-			"Name": "EditorScriptingUtilities",
-			"Enabled": true
-		},
-		{
 			"Name": "AssetManagerEditor",
 			"Enabled": true
 		}

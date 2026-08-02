@@ -12,6 +12,9 @@
 
 namespace
 {
+	/** Above this, a never-stream texture is a memory cost worth flagging. */
+	constexpr int64 NonStreamingBudgetBytes = 256 * 1024;
+
 	/**
 	 * Texels this texture delivers per metre of surface, for one usage of it.
 	 *
@@ -181,6 +184,33 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 			F.TargetActor = Pair.Value;
 			F.TargetAsset = Texture;
 			Out.Findings.Add(MoveTemp(F));
+		}
+
+		// --- Non-streaming and large -------------------------------------------
+		//
+		// A NeverStream texture is fully resident in VRAM for the level's whole
+		// lifetime — streaming can never trim it — so a large one is a fixed memory
+		// cost, unlike a streamable texture that only pays for the mips in view.
+		// Special-purpose groups (UI, lightmaps, render targets) are never-stream by
+		// design and are left alone.
+		if (!bSpecialPurpose && Texture->NeverStream && !Texture->VirtualTextureStreaming)
+		{
+			const int64 FullBytes = Texture->CalcTextureMemorySizeEnum(TMC_AllMips);
+			if (FullBytes > NonStreamingBudgetBytes)
+			{
+				const ESeverity Severity = FullBytes > NonStreamingBudgetBytes * 4
+					? ESeverity::Major : ESeverity::Minor;
+				FFinding F(TEXT("Texture.NonStreaming"), Severity, ECategory::Textures, EFindingScope::Asset,
+					LOCTEXT("NonStreamingTitle", "Large texture is set to never stream"), Subject);
+				F.WhyItMatters = FText::Format(
+					LOCTEXT("NonStreamingWhy", "Never Stream keeps all {0} of this texture resident in memory for the whole level; streaming can't reclaim any of it."),
+					FText::AsMemory(FullBytes));
+				F.HowToFix = LOCTEXT("NonStreamingFix", "Turn Never Stream off so its mips stream with distance, unless it must be pin-sharp at all times (a UI or decal atlas).");
+				F.TargetActor = Pair.Value;
+				F.TargetAsset = Texture;
+				F.FixId = TEXT("Fix_EnableStreaming");
+				Out.Findings.Add(MoveTemp(F));
+			}
 		}
 
 		if (!bSpecialPurpose && bPowerOfTwo && LongestSide >= 1024

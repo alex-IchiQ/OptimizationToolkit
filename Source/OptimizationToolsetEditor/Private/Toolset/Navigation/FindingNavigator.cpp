@@ -55,7 +55,7 @@ FText FFindingNavigator::GetActionLabel(const FFinding& Finding)
 {
 	if (Finding.TargetAsset.IsValid())
 	{
-		return LOCTEXT("ShowInContentButton", "Show in Content");
+		return LOCTEXT("ShowAssetButton", "Show Asset");
 	}
 	if (Finding.Scope == EFindingScope::Project)
 	{

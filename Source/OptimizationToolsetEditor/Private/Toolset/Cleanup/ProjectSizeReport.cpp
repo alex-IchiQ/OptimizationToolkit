@@ -19,7 +19,7 @@ namespace
 	 * prefix: "Material" would also swallow MaterialParameterCollection, and
 	 * anything unlisted should land in Other rather than be guessed at.
 	 */
-	EAssetCategory CategoryForClass(FName ClassName)
+	EAssetCategory CategoryForClassImpl(FName ClassName)
 	{
 		static const TMap<FName, EAssetCategory> Table = {
 			// Textures
@@ -83,6 +83,11 @@ namespace
 		const EAssetCategory* Found = Table.Find(ClassName);
 		return Found ? *Found : EAssetCategory::Other;
 	}
+}
+
+EAssetCategory FProjectSizeReport::CategoryForClass(FName ClassName)
+{
+	return CategoryForClassImpl(ClassName);
 }
 
 FText FProjectSizeReport::LabelForCategory(EAssetCategory Category)
@@ -155,7 +160,7 @@ FProjectSizeReport FProjectSizeReport::Compute()
 			continue;
 		}
 
-		const EAssetCategory Category = CategoryForClass(Pair.Value);
+		const EAssetCategory Category = CategoryForClassImpl(Pair.Value);
 		FProjectSizeEntry& Entry = ByCategory.FindOrAdd(Category);
 		Entry.Category = Category;
 		Entry.TotalBytes += Size;

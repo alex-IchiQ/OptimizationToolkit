@@ -1,9 +1,9 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "OptimizationToolsetEditorModule.h"
-#include "Toolset/ToolsetStyle.h"
-#include "Toolset/SToolsetWindow.h"
 #include "Toolset/ToolsetRegistry.h"
+#include "Toolset/Slate/OptimizeStyle.h"
+#include "Toolset/Slate/SOptimizeShell.h"
 
 #include "Framework/Docking/TabManager.h"
 #include "Widgets/Docking/SDockTab.h"
@@ -19,7 +19,7 @@ static const FName ToolsetTabName("OptimizationToolset");
 
 void FOptimizationToolsetEditorModule::StartupModule()
 {
-	FToolsetStyle::Initialize();
+	FOptimizeStyle::Initialize();
 	FToolsetRegistry::Get().RegisterDefaults();
 
 	// Register the dockable tab.
@@ -43,7 +43,7 @@ void FOptimizationToolsetEditorModule::ShutdownModule()
 		FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(ToolsetTabName);
 	}
 
-	FToolsetStyle::Shutdown();
+	FOptimizeStyle::Shutdown();
 }
 
 void FOptimizationToolsetEditorModule::OpenToolsetTab()
@@ -56,7 +56,7 @@ TSharedRef<SDockTab> FOptimizationToolsetEditorModule::SpawnToolsetTab(const FSp
 	return SNew(SDockTab)
 		.TabRole(ETabRole::NomadTab)
 		[
-			SNew(SToolsetWindow)
+			SNew(SOptimizeShell)
 		];
 }
 

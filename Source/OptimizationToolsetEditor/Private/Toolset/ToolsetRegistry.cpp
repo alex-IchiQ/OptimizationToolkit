@@ -23,7 +23,6 @@
 
 #include "Toolset/Cleanup/Actions/SaveDirtyPackagesAction.h"
 #include "Toolset/Cleanup/Actions/FixUpRedirectorsAction.h"
-#include "Toolset/Cleanup/Actions/DeleteUnusedAssetsAction.h"
 
 FToolsetRegistry& FToolsetRegistry::Get()
 {
@@ -57,10 +56,10 @@ void FToolsetRegistry::RegisterDefaults()
 	AddFix(MakeUnique<FConvertToInstancesFix>());
 	AddFix(MakeUnique<FNormalmapCompressionFix>());
 	AddFix(MakeUnique<FDisableTextureSRGBFix>());
+	AddFix(MakeUnique<FEnableStreamingFix>());
 
 	AddAction(MakeUnique<FSaveDirtyPackagesAction>());
 	AddAction(MakeUnique<FFixUpRedirectorsAction>());
-	AddAction(MakeUnique<FDeleteUnusedAssetsAction>());
 }
 
 void FToolsetRegistry::AddPass(TUniquePtr<IAnalyzePass> Pass)

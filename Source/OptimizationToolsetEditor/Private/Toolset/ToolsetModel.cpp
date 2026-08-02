@@ -215,3 +215,26 @@ void FToolsetModel::ApplyFix(TSharedPtr<FFinding> Finding)
 
 	RunScan();	// the level changed; every view's numbers are now stale
 }
+
+void FToolsetModel::ApplyFixes(const TArray<TSharedPtr<FFinding>>& Findings)
+{
+	// Snapshot first: the RunScan() at the end rebuilds AllFindings, which is the
+	// array these shared pointers were pulled from.
+	TArray<TSharedPtr<FFinding>> Snapshot = Findings;
+	for (const TSharedPtr<FFinding>& Finding : Snapshot)
+	{
+		if (!Finding.IsValid())
+		{
+			continue;
+		}
+		if (IOptimizationFix* Fix = FToolsetRegistry::Get().FindFix(Finding->FixId))
+		{
+			if (Fix->IsSupported())
+			{
+				Fix->Apply(*Finding);
+			}
+		}
+	}
+
+	RunScan();	// one refresh for the whole batch, not one per fix
+}
