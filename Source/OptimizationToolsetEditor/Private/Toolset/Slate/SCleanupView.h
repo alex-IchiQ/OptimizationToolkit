@@ -32,7 +32,7 @@ struct FCleanupEntry
 	/** The broad group the class falls in (drives the group filter). */
 	EAssetCategory Category = EAssetCategory::Other;
 
-	/** For a duplicate: the group key and how many share it. */
+	/** For a possible duplicate: the heuristic key and how many assets share it. */
 	FString DuplicateKey;
 	int32 DuplicateGroupSize = 0;
 };
@@ -45,11 +45,20 @@ enum class ECleanupFilter : uint8
 	Unused,
 };
 
+/** Whether the last project sweep produced a complete, trustworthy result. */
+enum class ECleanupScanState : uint8
+{
+	NotScanned,
+	Complete,
+	RegistryBusy,
+	Cancelled,
+};
+
 /**
- * Clean Up page for the new UI: project-wide duplicate and unused assets in one
+ * Clean Up page for the new UI: project-wide possible duplicates and unused assets in one
  * filterable list.
  *
- * Duplicates use a name+type+size heuristic across folders (the re-imported pack
+ * Possible duplicates use a name+type+size heuristic across folders (the re-imported pack
  * case), not a content hash. Unused reuses the plugin's stricter referencer check
  * (all dependency categories, with the level/redirector/config exclusions) rather
  * than the material-only test some tools ship, which over-reports.
@@ -100,7 +109,7 @@ private:
 	TSharedRef<SWidget> BuildActionBar();
 	FReply OnRunAction(const ICleanupAction* Action);
 
-	bool bHasScanned = false;
+	ECleanupScanState ScanState = ECleanupScanState::NotScanned;
 	FText LastActionResult;
 
 	TArray<TSharedPtr<FCleanupEntry>> AllEntries;

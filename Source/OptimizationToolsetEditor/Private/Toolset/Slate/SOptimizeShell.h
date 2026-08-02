@@ -12,7 +12,7 @@ class SOptimizeView;
 class SAnalyzerView;
 class SCleanupView;
 
-/** Left-nav sections of the new UI. Dashboard is a placeholder for now. */
+/** Left-nav sections, in tab order. */
 enum class EOptimizeSection : uint8
 {
 	Dashboard,
@@ -24,11 +24,10 @@ enum class EOptimizeSection : uint8
 };
 
 /**
- * Root of the new UI: a classic editor left-nav rail over a switched content area.
+ * Root of the toolset UI: a classic editor left-nav rail over a switched content
+ * area, in plain default editor styling.
  *
- * Deliberately plain (default editor styling, no toolset islands) and separate
- * from the existing SToolsetWindow, so the redesign can be built and compared in
- * isolation. Only Optimize is filled in; Dashboard is an empty section.
+ * Owns the one shared model and drives the single Scan that feeds every page.
  */
 class SOptimizeShell : public SCompoundWidget
 {
@@ -40,7 +39,7 @@ public:
 
 private:
 	TSharedRef<SWidget> BuildNav();
-	TSharedRef<SWidget> MakeNavButton(EOptimizeSection Section, const FText& Label);
+	TSharedRef<SWidget> MakeNavButton(EOptimizeSection Section, const FText& Label, const FName& IconName);
 
 	void SelectSection(EOptimizeSection Section);
 	bool IsSelected(EOptimizeSection Section) const { return Current == Section; }

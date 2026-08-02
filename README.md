@@ -1,71 +1,74 @@
 # Optimization / Profiling Toolset
 
-Editor-only Unreal Engine plugin that analyzes, optimizes and profiles the
-current level from a single dockable Slate panel.
-
-Positioning (vs. FAB competitors): combines **severity-based analysis**
-(like *Perfector: Level*) **with safe, Undo-able auto-fixes** (like *HXS
-Optimizer*) **and one-click profiling**, across a wide engine range and at a
-mid price — without the "beta" label or 5.6-only / Windows-only limits.
+Editor-only Unreal Engine plugin for analyzing, optimizing and profiling loaded
+levels from one dockable Slate panel.
 
 ## Requirements
 
-- Unreal Engine **5.3 – 5.7** (single source tree; per-version features gated
-  in `OptToolsetCompat.h`). Each engine version is shipped as its own build on
-  FAB.
-- Built-in plugin **Editor Scripting Utilities** (enabled automatically).
+- Unreal Engine 5.3–5.7. Version-sensitive APIs are gated in
+  `ToolsetCompat.h`; each FAB package is built for one engine version.
+- Built-in `AssetManagerEditor` plugin. It supplies the disk-size data used by
+  Blueprint dependency analysis and project cleanup.
 
-## Install (into a project)
+## Install
 
-1. Copy this folder to `YourProject/Plugins/OptimizationToolset`.
-2. Regenerate project files and build the editor target, **or** let the editor
-   compile it on first launch.
-3. Open via the **Optimize** toolbar button, or **Window → Optimization Toolset**.
+1. Copy the plugin to `<Project>/Plugins/OptimizationToolset`.
+2. Regenerate project files and build the editor target, or let Unreal compile
+   it on launch.
+3. Open **Optimization Toolset** from the **Optimize** toolbar button or
+   **Window → Optimization Toolset**.
 
-## Structure
+## Current UI
 
-```
-OptimizationToolset.uplugin
+`SOptimizeShell` owns the left navigation and a shared `FToolsetModel`. Its
+single **Scan** action updates five pages:
+
+- **Dashboard** — level statistics, severity totals, project size, analysis
+  thresholds and per-level scan scope.
+- **Optimize** — findings grouped by problem type and level, scope-aware
+  navigation, selection and supported auto-fixes.
+- **Analyzer** — loaded texture, render-target and mesh memory.
+- **Profile** — stat stacks, viewport complexity modes and Nanite/Lumen/VSM
+  visualizers.
+- **Clean Up** — possible duplicate and unreferenced assets, redirector fixup,
+  package saving and reviewed deletion.
+
+Changing a Dashboard threshold or level-scope toggle invalidates the previous
+analysis. Applying an optimization fix rescans once after the operation so all
+views stay in sync.
+
+## Source layout
+
+```text
 Source/OptimizationToolsetEditor/
-  OptimizationToolsetEditor.Build.cs
-  Public/
-    OptimizationToolsetEditorModule.h   # module entry (stays at root)
-    Toolset/
-      ToolsetCompat.h     # engine-version feature gates (OPTIMIZATION_* macros)
-      ToolsetTypes.h      # ESeverity / ECategory / EFindingScope, FFinding, FScanResult
-      LevelAnalyzer.h     # read-only level analysis (FLevelAnalyzer)
-      ToolsetStyle.h      # palette, rounded-card brushes, text styles (FToolsetStyle)
-      SToolsetWindow.h    # main dockable panel (SToolsetWindow)
-  Private/
-    OptimizationToolsetEditorModule.cpp
-    Toolset/
-      LevelAnalyzer.cpp
-      ToolsetStyle.cpp
-      SToolsetWindow.cpp
+  Public/Toolset/
+    Analyzer/            Analyze interfaces and shared scan context
+    Cleanup/             Cleanup interfaces and reports
+    Optimization/        Fix interface
+    OptimizationToolsetSettings.h
+    ToolsetModel.h
+    ToolsetRegistry.h
+    ToolsetTypes.h
+  Private/Toolset/
+    Analyzer/Passes/     One class per analysis pass
+    Cleanup/Actions/     Project-wide registry actions
+    Navigation/          Finding destination routing
+    Optimization/Fixes/ One class per transactional fix
+    Slate/               Active UI and OptimizeStyle
+    ToolsetModel.cpp
+    ToolsetRegistry.cpp
 ```
 
-Naming: the `Opt` abbreviation is dropped throughout. Feature code lives under
-`Toolset/` (included as `#include "Toolset/…"`). Where a distinctive prefix is
-genuinely required — the global preprocessor macros — the full word
-`OPTIMIZATION_` is used instead of the abbreviation.
+See [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md) for extension rules and
+[Docs/HANDOFF.md](Docs/HANDOFF.md) for current status and follow-up work.
 
-## What works today (v1.0 scaffold)
+## Safety notes
 
-- **Dockable Slate window**: left nav rail, header with live **health score**
-  gauge + **Scan Level** action, switched content area.
-- **Dashboard**: severity summary cards + workflow guide.
-- **Optimize** *(functional unified workspace)*: category thresholds above a
-  problem-type tree, search + severity filters, and Analyze-style finding cards.
-  Scope-aware navigation uses **Show in Content**, **Focus Actor**, or **Open Settings**; a second
-  **Apply** button appears when a safe transactional auto-fix exists. The card's
-  performance rationale is available on hover.
-- **Profile** *(functional)*: one-click `stat` command stacks (fps / unit / gpu
-  / scenerendering / rhi / initviews / streaming / profilegpu / clear).
-- **Cleanup** *(functional)*: project-size measurement and guarded maintenance
-  actions. **Reports** remains a designed placeholder.
-
-## Next up (roadmap)
-
-- Optimize: expand the supported fix set and add optional batch previews.
-- Cleanup: project size breakdown, fix redirectors, delete unused, settings audit.
-- Reports: CSV/JSON export, before/after snapshots.
+- Optimization fixes use Unreal transactions where the operation supports
+  Undo/Redo.
+- Clean Up operations can be destructive and use Unreal's own review and delete
+  dialogs.
+- “Possible duplicate” is intentionally a heuristic result based on matching
+  name, class and disk size across folders; it is not a content hash.
+- Unreferenced does not prove unused when content is loaded dynamically by path
+  or name. Review every deletion list.

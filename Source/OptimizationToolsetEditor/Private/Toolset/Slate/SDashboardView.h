@@ -48,7 +48,9 @@ enum class ELevelStat : uint8
  *   2. Found problems: the last scan's severity counts.
  *   3. Project size: where the project's disk footprint goes, one stacked bar
  *      over asset categories (measured on demand under /Game).
- *   4. Level scan scope: which loaded levels the next scan analyzes.
+ *   4. Settings: the analyze thresholds, grouped by section (a details view onto
+ *      the project settings object; edits apply on the next scan).
+ *   5. Scanning scope: which loaded levels the next scan analyzes.
  *
  * Counts, findings and scope come from the shared model; the size report is this
  * view's own, recomputed by the shell's single Scan action.
@@ -86,6 +88,9 @@ private:
 	TSharedRef<SWidget> BuildSizeCard();
 	void RebuildBreakdown();
 	FText GetSizeSummaryText() const;
+
+	// ---- Settings -----------------------------------------------------------
+	TSharedRef<SWidget> BuildSettingsCard();
 
 	// ---- Level scan scope ---------------------------------------------------
 	TSharedRef<SWidget> BuildLevelScopeCard();

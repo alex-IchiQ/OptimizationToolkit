@@ -23,11 +23,7 @@ public:
 	/** Focuses (or spawns) the toolset tab. */
 	void OpenToolsetTab();
 
-	/** Focuses (or spawns) the new-UI Optimize tab, developed in parallel. */
-	void OpenOptimizeViewTab();
-
 private:
 	void RegisterMenus();
 	TSharedRef<SDockTab> SpawnToolsetTab(const FSpawnTabArgs& Args);
-	TSharedRef<SDockTab> SpawnOptimizeViewTab(const FSpawnTabArgs& Args);
 };

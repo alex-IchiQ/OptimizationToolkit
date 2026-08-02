@@ -1,27 +1,32 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "Toolset/Slate/SDashboardView.h"
+#include "Toolset/Slate/OptimizeStyle.h"
+#include "Toolset/OptimizationToolsetSettings.h"
 #include "Toolset/ToolsetModel.h"
-#include "Toolset/ToolsetStyle.h"	// ColorForAssetCategory / ColorForSeverity (colour helpers)
 
 #include "Editor.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "Misc/PackageName.h"
 #include "Misc/ScopedSlowTask.h"
+#include "Styling/StyleDefaults.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
 #include "Styling/SlateTypes.h"
 
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Colors/SColorBlock.h"
+#include "Widgets/Images/SImage.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SExpandableArea.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/Layout/SWrapBox.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
+#include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Views/STableRow.h"
 
@@ -56,7 +61,13 @@ void SDashboardView::Construct(const FArguments& InArgs)
 				BuildSizeCard()
 			]
 
-			// 4. Which levels the next scan should look at.
+			// 4. Analyze thresholds, grouped by section — tune what the scan flags.
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 10, 0, 0))
+			[
+				BuildSettingsCard()
+			]
+
+			// 5. Which levels the next scan should look at.
 			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 10, 0, 0))
 			[
 				BuildLevelScopeCard()
@@ -81,19 +92,19 @@ void SDashboardView::Scan()
 TSharedRef<SWidget> SDashboardView::MakeCard(const FText& Title, const TSharedRef<SWidget>& Body)
 {
 	return SNew(SBorder)
-		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-		.Padding(FMargin(14, 12))
+		.BorderImage(FOptimizeStyle::Brush("Opt.Card"))
+		.Padding(FMargin(16, 14))
 		[
 			SNew(SVerticalBox)
 
 			+ SVerticalBox::Slot().AutoHeight()
 			[
 				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Heading")
 				.Text(Title)
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 12))
 			]
 
-			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 10, 0, 0))
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 12, 0, 0))
 			[
 				Body
 			]
@@ -160,7 +171,7 @@ FLinearColor SDashboardView::DeltaColorForLevelStat(ELevelStat Stat) const
 {
 	// Down is green because every number here is a cost: triangles, draw
 	// submissions, actors to tick.
-	return DeltaForLevelStat(Stat) < 0 ? FToolsetStyle::SeverityGood : FToolsetStyle::SeverityMajor;
+	return DeltaForLevelStat(Stat) < 0 ? FOptimizeStyle::SeverityGood : FOptimizeStyle::SeverityMajor;
 }
 
 TSharedRef<SWidget> SDashboardView::BuildStatsCard()
@@ -174,14 +185,15 @@ TSharedRef<SWidget> SDashboardView::BuildStatsCard()
 		];
 	}
 
-	return MakeCard(LOCTEXT("StatsTitle", "Level at a glance"), Grid);
+	return MakeCard(LOCTEXT("StatsTitle", "Statistics"), Grid);
 }
 
 TSharedRef<SWidget> SDashboardView::MakeStatCell(ELevelStat Stat)
 {
+	// Palatial stat tile: title, a hairline divider, then the big number, centred.
 	return SNew(SBorder)
-		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-		.Padding(FMargin(12, 10))
+		.BorderImage(FOptimizeStyle::Brush("Opt.Tile"))
+		.Padding(FMargin(10, 12))
 		.ToolTipText(TooltipForLevelStat(Stat))
 		[
 			SNew(SVerticalBox)
@@ -189,14 +201,23 @@ TSharedRef<SWidget> SDashboardView::MakeStatCell(ELevelStat Stat)
 			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
 			[
 				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
 				.Text(LabelForLevelStat(Stat))
-				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 			]
 
-			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(FMargin(0, 6, 0, 0))
+			// The signature divider between label and value.
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(6, 8))
+			[
+				SNew(SBox).HeightOverride(1.0f)
+				[
+					SNew(SImage).Image(FOptimizeStyle::Brush("Opt.Divider"))
+				]
+			]
+
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
 			[
 				SNew(STextBlock)
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 18))
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.StatValue")
 				.Text_Lambda([this, Stat]()
 				{
 					return (Model.IsValid() && Model->HasScanned())
@@ -210,6 +231,7 @@ TSharedRef<SWidget> SDashboardView::MakeStatCell(ELevelStat Stat)
 			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(FMargin(0, 4, 0, 0))
 			[
 				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
 				.Visibility_Lambda([this, Stat]()
 				{
 					return DeltaForLevelStat(Stat) != 0 ? EVisibility::Visible : EVisibility::Collapsed;
@@ -233,7 +255,7 @@ TSharedRef<SWidget> SDashboardView::MakeStatCell(ELevelStat Stat)
 TSharedRef<SWidget> SDashboardView::BuildFindingsCard()
 {
 	return MakeCard(
-		LOCTEXT("FindingsTitle", "Found problems"),
+		LOCTEXT("FindingsTitle", "Issues"),
 		SNew(SUniformGridPanel)
 		.SlotPadding(FMargin(4))
 		+ SUniformGridPanel::Slot(0, 0)[ MakeSeverityStatCard(ESeverity::Critical) ]
@@ -243,37 +265,57 @@ TSharedRef<SWidget> SDashboardView::BuildFindingsCard()
 
 TSharedRef<SWidget> SDashboardView::MakeSeverityStatCard(ESeverity Severity)
 {
-	const FLinearColor Color = FToolsetStyle::ColorForSeverity(Severity);
+	const FLinearColor Color = FOptimizeStyle::ColorForSeverity(Severity);
 
+	FText Tooltip;
+	switch (Severity)
+	{
+	case ESeverity::Critical: Tooltip = LOCTEXT("TipCritical", "Ships broken or a hard performance cliff — fix before the milestone."); break;
+	case ESeverity::Major:    Tooltip = LOCTEXT("TipMajor", "Notable cost worth fixing soon."); break;
+	default:                  Tooltip = LOCTEXT("TipMinor", "Hygiene and polish; low individual impact."); break;
+	}
+
+	// Same Palatial tile shape as the level stats: coloured label + dot, a hairline
+	// divider, then the big count centred below.
 	return SNew(SBorder)
-		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-		.Padding(FMargin(14, 12))
+		.BorderImage(FOptimizeStyle::Brush("Opt.Tile"))
+		.Padding(FMargin(10, 12))
+		.ToolTipText(Tooltip)
 		[
 			SNew(SVerticalBox)
 
-			// Coloured severity label with a leading dot.
-			+ SVerticalBox::Slot().AutoHeight()
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
 			[
 				SNew(SHorizontalBox)
 
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 8, 0))
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 7, 0))
 				[
 					SNew(SColorBlock).Color(Color).Size(FVector2D(9.0f, 9.0f))
 				]
 
-				+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 				[
 					SNew(STextBlock)
-					.Text(FToolsetStyle::LabelForSeverity(Severity))
+					.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
+					.Text(FOptimizeStyle::LabelForSeverity(Severity))
 					.ColorAndOpacity(FSlateColor(Color))
 				]
 			]
 
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(6, 8))
+			[
+				SNew(SBox).HeightOverride(1.0f)
+				[
+					SNew(SImage).Image(FOptimizeStyle::Brush("Opt.Divider"))
+				]
+			]
+
 			// Big count, bound so a scan (or an applied fix) redraws it.
-			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 6, 0, 0))
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
 			[
 				SNew(STextBlock)
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 20))
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Metric")
+				.ColorAndOpacity(FSlateColor(Color))
 				.Text_Lambda([this, Severity]()
 				{
 					return (Model.IsValid() && Model->HasScanned())
@@ -290,14 +332,14 @@ TSharedRef<SWidget> SDashboardView::MakeSeverityStatCard(ESeverity Severity)
 TSharedRef<SWidget> SDashboardView::BuildSizeCard()
 {
 	return MakeCard(
-		LOCTEXT("SizeTitle", "Project size"),
+		LOCTEXT("SizeTitle", "Project Size"),
 		SNew(SVerticalBox)
 
 		+ SVerticalBox::Slot().AutoHeight()
 		[
 			SNew(STextBlock)
+			.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
 			.Text(this, &SDashboardView::GetSizeSummaryText)
-			.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 			.AutoWrapText(true)
 		]
 
@@ -328,7 +370,7 @@ void SDashboardView::RebuildBreakdown()
 
 	for (const FProjectSizeEntry& Entry : SizeReport.Entries)
 	{
-		const FLinearColor Color = FToolsetStyle::ColorForAssetCategory(Entry.Category);
+		const FLinearColor Color = FOptimizeStyle::ColorForAssetCategory(Entry.Category);
 		const float Fraction = static_cast<float>(
 			static_cast<double>(Entry.TotalBytes) / static_cast<double>(SizeReport.TotalBytes));
 
@@ -390,7 +432,299 @@ FText SDashboardView::GetSizeSummaryText() const
 }
 
 // ---------------------------------------------------------------------------
-// 4. Level scan scope
+// 4. Settings
+// ---------------------------------------------------------------------------
+namespace
+{
+	using FIntSetting = int32 UOptimizationToolsetSettings::*;
+	using FBoolSetting = bool UOptimizationToolsetSettings::*;
+
+	/** A reset-to-default button, shown only while the value differs from Default. */
+	template <typename Getter, typename Resetter>
+	TSharedRef<SWidget> MakeResetButton(const Getter& DiffersFromDefault, const Resetter& Reset)
+	{
+		return SNew(SButton)
+			.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Icon")
+			.ContentPadding(FMargin(2))
+			.ToolTipText(LOCTEXT("ResetOne", "Reset to default"))
+			.Visibility_Lambda([DiffersFromDefault]() { return DiffersFromDefault() ? EVisibility::Visible : EVisibility::Collapsed; })
+			.OnClicked_Lambda([Reset]() { Reset(); return FReply::Handled(); })
+			[
+				SNew(SBox).WidthOverride(16.0f).HeightOverride(16.0f)
+				[
+					SNew(SImage)
+					.Image(FAppStyle::GetBrush("PropertyWindow.DiffersFromDefault"))
+					.ColorAndOpacity(FSlateColor::UseForeground())
+				]
+			];
+	}
+
+	/** One boolean row: label in the left half, checkbox + reset at the start of the right half. */
+	TSharedRef<SWidget> MakeBoolSettingRow(const FText& Label, const FText& Tooltip, FBoolSetting Member, bool Default,
+		const FSimpleDelegate& OnSettingsChanged)
+	{
+		return SNew(SHorizontalBox)
+
+			+ SHorizontalBox::Slot().FillWidth(0.5f).VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body")
+				.Text(Label)
+				.ToolTipText(Tooltip)
+			]
+
+			+ SHorizontalBox::Slot().FillWidth(0.5f).VAlign(VAlign_Center).HAlign(HAlign_Left)
+			[
+				SNew(SHorizontalBox)
+
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				[
+					SNew(SCheckBox)
+					.ToolTipText(Tooltip)
+					.IsChecked_Lambda([Member]()
+					{
+						return GetDefault<UOptimizationToolsetSettings>()->*Member ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+					})
+					.OnCheckStateChanged_Lambda([Member, OnSettingsChanged](ECheckBoxState State)
+					{
+						UOptimizationToolsetSettings* Settings = GetMutableDefault<UOptimizationToolsetSettings>();
+						Settings->*Member = (State == ECheckBoxState::Checked);
+						Settings->TryUpdateDefaultConfigFile();
+						OnSettingsChanged.ExecuteIfBound();
+					})
+				]
+
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(6, 0, 0, 0))
+				[
+					MakeResetButton(
+						[Member, Default]() { return GetDefault<UOptimizationToolsetSettings>()->*Member != Default; },
+						[Member, Default, OnSettingsChanged]()
+						{
+							UOptimizationToolsetSettings* Settings = GetMutableDefault<UOptimizationToolsetSettings>();
+							Settings->*Member = Default;
+							Settings->TryUpdateDefaultConfigFile();
+							OnSettingsChanged.ExecuteIfBound();
+						})
+				]
+			];
+	}
+
+	/** One threshold row: label on the left, a themed spin box + reset in the right half. */
+	TSharedRef<SWidget> MakeIntSettingRow(const FText& Label, const FText& Tooltip, FIntSetting Member, int32 Default,
+		int32 Min, int32 Max, int32 UiMin, int32 UiMax, const FSimpleDelegate& OnSettingsChanged)
+	{
+		return SNew(SHorizontalBox)
+
+			+ SHorizontalBox::Slot().FillWidth(0.5f).VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body")
+				.Text(Label)
+				.ToolTipText(Tooltip)
+			]
+
+			// A fixed-width spin box at the start of the right half — the two-column
+			// feel of a stock details view — with the per-row reset beside it.
+			+ SHorizontalBox::Slot().FillWidth(0.5f).VAlign(VAlign_Center).HAlign(HAlign_Left)
+			[
+				SNew(SHorizontalBox)
+
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				[
+					SNew(SBox).WidthOverride(140.0f)
+					[
+						SNew(SSpinBox<int32>)
+						.Style(&FOptimizeStyle::Get().GetWidgetStyle<FSpinBoxStyle>("Opt.SpinBox"))
+						.MinValue(Min).MaxValue(Max)
+						.MinSliderValue(UiMin).MaxSliderValue(UiMax)
+						.ToolTipText(Tooltip)
+						.Value_Lambda([Member]() { return GetDefault<UOptimizationToolsetSettings>()->*Member; })
+						.OnValueChanged_Lambda([Member](int32 V) { GetMutableDefault<UOptimizationToolsetSettings>()->*Member = V; })
+						.OnValueCommitted_Lambda([Member, OnSettingsChanged](int32 V, ETextCommit::Type)
+						{
+							UOptimizationToolsetSettings* Settings = GetMutableDefault<UOptimizationToolsetSettings>();
+							Settings->*Member = V;
+							Settings->TryUpdateDefaultConfigFile();	// persist to DefaultEditor config
+							OnSettingsChanged.ExecuteIfBound();
+						})
+					]
+				]
+
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(6, 0, 0, 0))
+				[
+					MakeResetButton(
+						[Member, Default]() { return GetDefault<UOptimizationToolsetSettings>()->*Member != Default; },
+						[Member, Default, OnSettingsChanged]()
+						{
+							UOptimizationToolsetSettings* Settings = GetMutableDefault<UOptimizationToolsetSettings>();
+							Settings->*Member = Default;
+							Settings->TryUpdateDefaultConfigFile();
+							OnSettingsChanged.ExecuteIfBound();
+						})
+				]
+			];
+	}
+}
+
+TSharedRef<SWidget> SDashboardView::BuildSettingsCard()
+{
+	// Custom rows (rather than a stock details view) so the thresholds sit in our
+	// own dark/teal style. Each section is a collapsible area; edits persist to
+	// config and the analyzer reads them on the next scan.
+	using S = UOptimizationToolsetSettings;
+	const FSimpleDelegate OnSettingsChanged = FSimpleDelegate::CreateLambda(
+		[WeakModel = TWeakPtr<FToolsetModel>(Model)]()
+		{
+			if (const TSharedPtr<FToolsetModel> PinnedModel = WeakModel.Pin())
+			{
+				PinnedModel->InvalidateScan();
+			}
+		});
+
+	// A collapsible section: a titled header over its threshold rows. Flat (no default
+	// rounded border/background) so it matches the rest of the card.
+	auto MakeSection = [](const FText& Title, const TSharedRef<SVerticalBox>& Rows)
+	{
+		return SNew(SExpandableArea)
+			.InitiallyCollapsed(true)
+			.BorderImage(FStyleDefaults::GetNoBrush())
+			.BorderBackgroundColor(FLinearColor::Transparent)
+			.HeaderPadding(FMargin(2, 6))
+			// Left inset indents the rows under the section header.
+			.Padding(FMargin(36, 2, 8, 8))
+			.HeaderContent()
+			[
+				SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Heading").Text(Title)
+			]
+			.BodyContent()
+			[
+				Rows
+			];
+	};
+
+	auto Rows = []() { return SNew(SVerticalBox); };
+	auto Add = [](const TSharedRef<SVerticalBox>& Box, const TSharedRef<SWidget>& Row)
+	{
+		Box->AddSlot().AutoHeight().Padding(FMargin(0, 3))[ Row ];
+	};
+
+	TSharedRef<SVerticalBox> Body = SNew(SVerticalBox);
+	auto AddSection = [&Body, &MakeSection](const FText& Title, const TSharedRef<SVerticalBox>& Rows)
+	{
+		Body->AddSlot().AutoHeight().Padding(FMargin(0, 1))[ MakeSection(Title, Rows) ];
+	};
+
+	// Scan
+	{
+		TSharedRef<SVerticalBox> R = Rows();
+		Add(R, MakeBoolSettingRow(LOCTEXT("SetIncludeSub", "Include sub-levels by default"),
+			LOCTEXT("SetIncludeSubTip", "When on, newly discovered loaded sub-levels start included in the scan scope. Each level can still be toggled below."),
+			&S::bIncludeSubLevels, S::Default_bIncludeSubLevels, OnSettingsChanged));
+		AddSection(LOCTEXT("SecScan", "Scan"), R);
+	}
+
+	// Meshes
+	{
+		TSharedRef<SVerticalBox> R = Rows();
+		Add(R, MakeIntSettingRow(LOCTEXT("SetNaniteMin", "Nanite low-poly threshold"),
+			LOCTEXT("SetNaniteMinTip", "Triangles at or below which an enabled Nanite mesh is flagged for review (0 disables)."),
+			&S::NaniteMinimumTriangles, S::Default_NaniteMinimumTriangles, 0, 1000000, 0, 20000, OnSettingsChanged));
+		Add(R, MakeIntSettingRow(LOCTEXT("SetNaniteCand", "Nanite candidate triangles"),
+			LOCTEXT("SetNaniteCandTip", "Triangles above which a non-Nanite mesh is suggested for Nanite."),
+			&S::NaniteCandidateTriangles, S::Default_NaniteCandidateTriangles, 1000, 10000000, 1000, 1000000, OnSettingsChanged));
+		Add(R, MakeIntSettingRow(LOCTEXT("SetExcessive", "Excessive triangles"),
+			LOCTEXT("SetExcessiveTip", "Triangle count treated as a critical cost on a single non-Nanite mesh."),
+			&S::ExcessiveTriangles, S::Default_ExcessiveTriangles, 10000, 100000000, 10000, 5000000, OnSettingsChanged));
+		AddSection(LOCTEXT("SecMeshes", "Meshes"), R);
+	}
+
+	// Textures
+	{
+		TSharedRef<SVerticalBox> R = Rows();
+		Add(R, MakeIntSettingRow(LOCTEXT("SetTexDensity", "Texture density budget (texels/m)"),
+			LOCTEXT("SetTexDensityTip", "Texels per metre a texture may deliver before it is called oversized."),
+			&S::TextureDensityBudget, S::Default_TextureDensityBudget, 128, 16384, 512, 8192, OnSettingsChanged));
+		Add(R, MakeIntSettingRow(LOCTEXT("SetOversized", "Oversized texture size"),
+			LOCTEXT("SetOversizedTip", "Fallback size limit used when streaming data can't say how large a texture appears."),
+			&S::OversizedTextureSize, S::Default_OversizedTextureSize, 256, 16384, 256, 8192, OnSettingsChanged));
+		AddSection(LOCTEXT("SecTextures", "Textures"), R);
+	}
+
+	// Materials
+	{
+		TSharedRef<SVerticalBox> R = Rows();
+		Add(R, MakeIntSettingRow(LOCTEXT("SetSlots", "Material slot budget"),
+			LOCTEXT("SetSlotsTip", "Material slots allowed on a mesh before it is flagged."),
+			&S::MaterialSlotBudget, S::Default_MaterialSlotBudget, 1, 64, 1, 32, OnSettingsChanged));
+		Add(R, MakeIntSettingRow(LOCTEXT("SetSamplers", "Material sampler budget"),
+			LOCTEXT("SetSamplersTip", "Texture samplers a material may use before it is flagged (hard limit 16)."),
+			&S::MaterialSamplerBudget, S::Default_MaterialSamplerBudget, 1, 16, 4, 16, OnSettingsChanged));
+		Add(R, MakeIntSettingRow(LOCTEXT("SetInstr", "Material instruction budget"),
+			LOCTEXT("SetInstrTip", "Shader instructions a material may reach before review."),
+			&S::MaterialInstructionBudget, S::Default_MaterialInstructionBudget, 50, 10000, 100, 2000, OnSettingsChanged));
+		AddSection(LOCTEXT("SecMaterials", "Materials"), R);
+	}
+
+	// Lighting
+	{
+		TSharedRef<SVerticalBox> R = Rows();
+		Add(R, MakeIntSettingRow(LOCTEXT("SetMovable", "Movable light budget"),
+			LOCTEXT("SetMovableTip", "Movable lights allowed in each loaded level before per-light findings appear."),
+			&S::MovableLightBudget, S::Default_MovableLightBudget, 0, 512, 0, 128, OnSettingsChanged));
+		Add(R, MakeIntSettingRow(LOCTEXT("SetLightmap", "Lightmap resolution budget"),
+			LOCTEXT("SetLightmapTip", "Lightmap resolution a single component may use before review."),
+			&S::LightmapResolutionBudget, S::Default_LightmapResolutionBudget, 32, 4096, 64, 2048, OnSettingsChanged));
+		AddSection(LOCTEXT("SecLighting", "Lighting"), R);
+	}
+
+	// Instancing
+	{
+		TSharedRef<SVerticalBox> R = Rows();
+		Add(R, MakeIntSettingRow(LOCTEXT("SetInstancing", "Instancing candidate count"),
+			LOCTEXT("SetInstancingTip", "Minimum compatible repeated actors required for an ISM/HISM recommendation."),
+			&S::InstancingCandidateCount, S::Default_InstancingCandidateCount, 2, 10000, 2, 100, OnSettingsChanged));
+		AddSection(LOCTEXT("SecInstancing", "Instancing"), R);
+	}
+
+	// Blueprints
+	{
+		TSharedRef<SVerticalBox> R = Rows();
+		Add(R, MakeIntSettingRow(LOCTEXT("SetDepChain", "Dependency chain size (MB)"),
+			LOCTEXT("SetDepChainTip", "Disk a Blueprint's hard-reference chain may reach before it is flagged."),
+			&S::DependencyChainSizeMB, S::Default_DependencyChainSizeMB, 1, 100000, 8, 1024, OnSettingsChanged));
+		AddSection(LOCTEXT("SecBlueprints", "Blueprints"), R);
+	}
+
+	// Reset-to-defaults, right-aligned under the sections. The spin boxes read the
+	// settings through Value lambdas, so they redraw with the restored values.
+	Body->AddSlot().AutoHeight().Padding(FMargin(0, 12, 8, 0))
+	[
+		SNew(SHorizontalBox)
+
+		+ SHorizontalBox::Slot().FillWidth(1.0f)[ SNullWidget::NullWidget ]
+
+		+ SHorizontalBox::Slot().AutoWidth()
+		[
+			SNew(SButton)
+			.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Secondary")
+			.ToolTipText(LOCTEXT("ResetTip", "Restore every threshold to its shipped default."))
+			.OnClicked_Lambda([OnSettingsChanged]()
+			{
+				GetMutableDefault<UOptimizationToolsetSettings>()->ResetToDefaults();
+				OnSettingsChanged.ExecuteIfBound();
+				return FReply::Handled();
+			})
+			[
+				SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body").Text(LOCTEXT("ResetDefaults", "Reset to Defaults"))
+			]
+		]
+	];
+
+	return MakeCard(LOCTEXT("SettingsTitle", "Settings"), Body);
+}
+
+// ---------------------------------------------------------------------------
+// 5. Level scan scope
 // ---------------------------------------------------------------------------
 TSharedRef<SWidget> SDashboardView::BuildLevelScopeCard()
 {
@@ -405,27 +739,30 @@ TSharedRef<SWidget> SDashboardView::BuildLevelScopeCard()
 			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
 			[
 				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
 				.Text(LOCTEXT("LevelScopeHint", "Changing scope clears stale results; unchecked levels are skipped by the next scan."))
-				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 				.AutoWrapText(true)
 			]
 
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(8, 0, 0, 0))
 			[
 				SNew(SButton)
-				.ButtonStyle(&FAppStyle::Get(), "SimpleButton")
+				.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Secondary")
 				.OnClicked(this, &SDashboardView::OnRefreshLevelsClicked)
 				[
-					SNew(STextBlock).Text(LOCTEXT("RefreshLevels", "Refresh"))
+					SNew(STextBlock)
+					.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body")
+					.Text(LOCTEXT("RefreshLevels", "Refresh"))
 				]
 			]
 		]
 
-		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 10, 0, 0))
+		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 12, 0, 0))
 		[
 			SNew(SBox).HeightOverride(180.0f)
 			[
 				SAssignNew(LevelTree, STreeView<TSharedPtr<FDashboardLevelItem>>)
+				.TreeViewStyle(&FOptimizeStyle::Get().GetWidgetStyle<FTableViewStyle>("Opt.TreeView"))
 				.TreeItemsSource(&LevelRoots)
 				.SelectionMode(ESelectionMode::None)
 				.OnGenerateRow(this, &SDashboardView::GenerateLevelRow)
@@ -433,7 +770,7 @@ TSharedRef<SWidget> SDashboardView::BuildLevelScopeCard()
 			]
 		];
 
-	TSharedRef<SWidget> Card = MakeCard(LOCTEXT("LevelScopeTitle", "Level scan scope"), Body);
+	TSharedRef<SWidget> Card = MakeCard(LOCTEXT("ScopeTitle", "Scanning Scope"), Body);
 
 	if (LevelTree.IsValid() && !LevelRoots.IsEmpty())
 	{
@@ -516,7 +853,8 @@ TSharedRef<ITableRow> SDashboardView::GenerateLevelRow(
 	const bool bPersistent = Item.IsValid() && Item->bPersistentLevel;
 
 	return SNew(STableRow<TSharedPtr<FDashboardLevelItem>>, OwnerTable)
-		.Padding(FMargin(4, 3))
+		.Style(&FOptimizeStyle::Get(), "Opt.TableRow")
+		.Padding(FMargin(8, 5))
 		[
 			SNew(SHorizontalBox)
 
@@ -541,17 +879,18 @@ TSharedRef<ITableRow> SDashboardView::GenerateLevelRow(
 			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center).Padding(FMargin(8, 0, 0, 0))
 			[
 				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), bPersistent ? "Opt.Text.Heading" : "Opt.Text.Body")
 				.Text(Item.IsValid() ? Item->Label : FText::GetEmpty())
-				.Font(bPersistent ? FCoreStyle::GetDefaultFontStyle("Bold", 10) : FCoreStyle::GetDefaultFontStyle("Regular", 10))
+				.ColorAndOpacity(bPersistent ? FSlateColor(FOptimizeStyle::Accent) : FSlateColor(FOptimizeStyle::TextPrimary))
 			]
 
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(10, 0, 6, 0))
 			[
 				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
 				.Text(Item.IsValid()
 					? FText::Format(LOCTEXT("LevelActorCount", "{0} actors"), FText::AsNumber(Item->ActorCount))
 					: FText::GetEmpty())
-				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 			]
 		];
 }

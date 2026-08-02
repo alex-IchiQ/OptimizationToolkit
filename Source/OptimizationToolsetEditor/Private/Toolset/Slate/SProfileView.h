@@ -3,13 +3,36 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Toolset/Panels/SProfilePanel.h"	// FProfileAction (command + view mode)
+#include "Engine/EngineBaseTypes.h"	// EViewModeIndex
 #include "Widgets/SCompoundWidget.h"
 
+class SVerticalBox;
+
 /**
- * Profile page for the new UI: the same verified stat / visualizer actions as the
- * old panel, rendered in plain default editor styling and living in Slate/ so the
- * redesign stays self-contained.
+ * One labelled thing the Profile page can do to the viewport.
+ *
+ * Almost every entry is "run a console variable, then put the viewport in the
+ * view mode that displays it" — so both halves live in one record and the page
+ * builds itself from arrays instead of a hundred hand-written buttons.
+ */
+struct FProfileAction
+{
+	FText Label;
+
+	/** Console command / cvar assignment. Empty to only change the view mode. */
+	FString Command;
+
+	/** VMI_Unknown leaves the viewport's view mode alone (the stat buttons do). */
+	EViewModeIndex ViewMode = VMI_Unknown;
+
+	FText Tooltip;
+};
+
+/**
+ * Profile page: console stat stacks and GPU visualizers for the editor viewport.
+ *
+ * Takes no model — nothing here reads the scan; it is the one page that talks to
+ * the viewport rather than to the level.
  */
 class SProfileView : public SCompoundWidget
 {

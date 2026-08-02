@@ -1,10 +1,12 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "Toolset/Slate/SOptimizeView.h"
+#include "Toolset/Slate/OptimizeStyle.h"
 #include "Toolset/Analyzer/LevelAnalyzer.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
 #include "Toolset/Navigation/FindingNavigator.h"
 #include "Toolset/ToolsetModel.h"
-#include "Toolset/ToolsetStyle.h"
 
 #include "Editor.h"
 #include "Engine/Level.h"
@@ -226,7 +228,10 @@ public:
 	{
 		OnGenerateCell = InArgs._OnGenerateCell;
 		SMultiColumnTableRow<TSharedPtr<FAffectedNode>>::Construct(
-			FSuperRowType::FArguments().Padding(FMargin(0, 2)), OwnerTable);
+			FSuperRowType::FArguments()
+				.Style(&FOptimizeStyle::Get(), "Opt.TableRow")
+				.Padding(FMargin(0, 2)),
+			OwnerTable);
 	}
 
 	virtual TSharedRef<SWidget> GenerateWidgetForColumn(const FName& ColumnName) override
@@ -283,9 +288,9 @@ void SOptimizeView::Construct(const FArguments& InArgs)
 		// Top bar: live summary (the Scan action lives in the shell now).
 		+ SVerticalBox::Slot()
 		.AutoHeight()
-		.Padding(FMargin(6, 6, 6, 4))
+		.Padding(FMargin(8, 8, 8, 4))
 		[
-			SNew(STextBlock).Text(this, &SOptimizeView::GetSummaryText)
+			SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body").Text(this, &SOptimizeView::GetSummaryText)
 		]
 
 		+ SVerticalBox::Slot().AutoHeight()[ SNew(SSeparator) ]
@@ -301,7 +306,8 @@ void SOptimizeView::Construct(const FArguments& InArgs)
 			.Value(0.5f)
 			[
 				SNew(SBorder)
-				.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+				.BorderImage(FOptimizeStyle::Brush("Opt.Card"))
+				.Padding(FMargin(4))
 				[
 					SAssignNew(TreeView, STreeView<TSharedPtr<FOptimizeNode>>)
 					.TreeItemsSource(&TreeRoots)
@@ -319,9 +325,10 @@ void SOptimizeView::Construct(const FArguments& InArgs)
 
 				+ SVerticalBox::Slot()
 				.AutoHeight()
-				.Padding(FMargin(6, 4))
+				.Padding(FMargin(8, 6, 8, 4))
 				[
 					SNew(STextBlock)
+					.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body")
 					.Text(this, &SOptimizeView::GetAffectedHeaderText)
 				]
 
@@ -329,7 +336,8 @@ void SOptimizeView::Construct(const FArguments& InArgs)
 				.FillHeight(1.0f)
 				[
 					SNew(SBorder)
-					.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+					.BorderImage(FOptimizeStyle::Brush("Opt.Card"))
+					.Padding(FMargin(4))
 					[
 						SAssignNew(AffectedList, STreeView<TSharedPtr<FAffectedNode>>)
 						.TreeItemsSource(&AffectedItems)
@@ -353,7 +361,9 @@ void SOptimizeView::Construct(const FArguments& InArgs)
 
 			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
 			[
-				SNew(STextBlock).Text_Lambda([this]()
+				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
+				.Text_Lambda([this]()
 				{
 					return FText::Format(LOCTEXT("SelectedFmt", "{0} selected, {1} to fix"),
 						FText::AsNumber(CheckedNodes.Num()), FText::AsNumber(CheckedFixableCount()));
@@ -363,10 +373,15 @@ void SOptimizeView::Construct(const FArguments& InArgs)
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			[
 				SNew(SButton)
+				.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Primary")
 				.IsEnabled_Lambda([this]() { return IsApplyEnabled(); })
+				.ToolTipText(LOCTEXT("ApplyTip", "Apply every ticked fix, then rescan once."))
 				.OnClicked(this, &SOptimizeView::OnApplyClicked)
 				[
-					SNew(STextBlock).Text(LOCTEXT("Apply", "Apply Fixes"))
+					SNew(STextBlock)
+					.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.NavLabel")
+					.ColorAndOpacity(FSlateColor(FOptimizeStyle::OnAccent))
+					.Text(LOCTEXT("Apply", "Apply Fixes"))
 				]
 			]
 		]
@@ -547,19 +562,19 @@ TSharedRef<ITableRow> SOptimizeView::GenerateTreeRow(TSharedPtr<FOptimizeNode> N
 
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 6, 0))
 			[
-				SNew(SColorBlock).Color(FToolsetStyle::ColorForSeverity(Node->Worst)).Size(FVector2D(8.0f, 8.0f))
+				SNew(SColorBlock).Color(FOptimizeStyle::ColorForSeverity(Node->Worst)).Size(FVector2D(8.0f, 8.0f))
 			]
 
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			[
-				SNew(STextBlock).Text(Node->Label).Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+				SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Heading").Text(Node->Label)
 			]
 
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(6, 0, 0, 0))
 			[
 				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
 				.Text(FText::Format(LOCTEXT("CountFmt", "({0})"), FText::AsNumber(Node->LeafCount())))
-				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 			]
 		];
 }
@@ -575,48 +590,69 @@ TSharedRef<SWidget> SOptimizeView::MakeProblemCard(const TSharedPtr<FOptimizeNod
 
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 7, 0))
 		[
-			SNew(SColorBlock).Color(FToolsetStyle::ColorForSeverity(Node->Worst)).Size(FVector2D(9.0f, 9.0f))
+			SNew(SColorBlock).Color(FOptimizeStyle::ColorForSeverity(Node->Worst)).Size(FVector2D(9.0f, 9.0f))
 		]
 
 		+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
 		[
-			SNew(STextBlock).Text(Node->Label).Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+			SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Heading").Text(Node->Label)
 		]
 
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(6, 0, 0, 0))
 		[
 			SNew(STextBlock)
+			.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
 			.Text(FText::Format(LOCTEXT("CardCountFmt", "{0}"), FText::AsNumber(Node->LeafCount())))
-			.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 		]
 	];
 
-	// Why it matters (moved out of the old tooltip, into the card).
+	// A colour-coded label ("WHY" / "FIX") followed by the wrapping text, so the two
+	// read as distinct at a glance: amber for the cost, teal for the remedy.
+	auto MakeLabelledLine = [](const FText& Label, const FLinearColor& LabelColor, const FText& Text)
+	{
+		return SNew(SHorizontalBox)
+
+			+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0, 1, 8, 0))
+			[
+				SNew(SBox).WidthOverride(26.0f)
+				[
+					SNew(STextBlock)
+					.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
+					.ColorAndOpacity(FSlateColor(LabelColor))
+					.Text(Label)
+				]
+			]
+
+			+ SHorizontalBox::Slot().FillWidth(1.0f)
+			[
+				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body")
+				.Text(Text)
+				.AutoWrapText(true)
+			];
+	};
+
+	// Why it matters (the cost) — amber, like a Major-severity cue.
 	if (!Node->Why.IsEmpty())
 	{
-		Body->AddSlot().AutoHeight().Padding(FMargin(16, 5, 0, 0))
+		Body->AddSlot().AutoHeight().Padding(FMargin(16, 7, 0, 0))
 		[
-			SNew(STextBlock)
-			.Text(Node->Why)
-			.AutoWrapText(true)
-			.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+			MakeLabelledLine(LOCTEXT("WhyLabel", "WHY"), FOptimizeStyle::SeverityMajor, Node->Why)
 		];
 	}
 
-	// How to fix.
+	// How to fix (the remedy) — teal, the accent.
 	if (!Node->How.IsEmpty())
 	{
-		Body->AddSlot().AutoHeight().Padding(FMargin(16, 3, 0, 0))
+		Body->AddSlot().AutoHeight().Padding(FMargin(16, 4, 0, 0))
 		[
-			SNew(STextBlock)
-			.Text(FText::Format(LOCTEXT("CardFixFmt", "Fix: {0}"), Node->How))
-			.AutoWrapText(true)
+			MakeLabelledLine(LOCTEXT("FixLabel", "FIX"), FOptimizeStyle::Accent, Node->How)
 		];
 	}
 
 	return SNew(SBorder)
-		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-		.Padding(FMargin(10, 8))
+		.BorderImage(FOptimizeStyle::Brush("Opt.Tile"))
+		.Padding(FMargin(12, 10))
 		[
 			Body
 		];
@@ -747,7 +783,7 @@ void SOptimizeView::BuildColumns(const TSharedPtr<FOptimizeNode>& Problem)
 	// Fixed check column first.
 	HeaderRow->AddColumn(SHeaderRow::Column(OptimizeColumns::Check)
 		.DefaultLabel(FText::GetEmpty())
-		.FixedWidth(28.0f)
+		.FixedWidth(46.0f)
 		.HAlignHeader(HAlign_Center));
 
 	for (const FAssetColumn& Column : Columns)
@@ -788,12 +824,19 @@ TSharedRef<SWidget> SOptimizeView::GenerateCell(const FName& ColumnId, TSharedPt
 	{
 		// Every fixable row is selectable now, members included, so a subset of a
 		// group can be converted. The parent is a tri-state roll-up of its members.
+		// No auto-fix -> no checkbox at all, rather than a dead disabled one: these
+		// rows (project settings, review-only findings) are never selectable.
 		const bool bFixable = Finding.IsValid() && FToolsetModel::HasSupportedFix(*Finding);
-		return SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)
+		if (!bFixable)
+		{
+			return SNullWidget::NullWidget;
+		}
+		// Group members sit one level in, so their checkbox is indented to line up
+		// under the parent's expander rather than hugging the far-left edge.
+		const float LeftPad = bMember ? 18.0f : 0.0f;
+		return SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center).Padding(FMargin(LeftPad, 0, 0, 0))
 		[
 			SNew(SCheckBox)
-			.IsEnabled(bFixable)
-			.ToolTipText(bFixable ? FText::GetEmpty() : LOCTEXT("NoAutoFix", "No automatic fix for this finding."))
 			.IsChecked(this, &SOptimizeView::GetItemCheck, Node)
 			.OnCheckStateChanged(this, &SOptimizeView::OnItemCheckChanged, Node)
 		];
@@ -810,7 +853,7 @@ TSharedRef<SWidget> SOptimizeView::GenerateCell(const FName& ColumnId, TSharedPt
 		return SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)
 		[
 			SNew(SButton)
-			.ButtonStyle(&FAppStyle::Get(), "SimpleButton")
+			.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Icon")
 			.ContentPadding(FMargin(4, 2))
 			.IsEnabled(bCanNavigate)
 			.ToolTipText(Tip)
@@ -855,7 +898,7 @@ TSharedRef<SWidget> SOptimizeView::GenerateCell(const FName& ColumnId, TSharedPt
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(6, 0, 6, 0))
 			[
 				SNew(SColorBlock)
-				.Color(FToolsetStyle::ColorForSeverity(Finding->Severity))
+				.Color(FOptimizeStyle::ColorForSeverity(Finding->Severity))
 				.Size(FVector2D(8.0f, 8.0f))
 			]
 			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
@@ -1026,7 +1069,19 @@ FReply SOptimizeView::OnApplyClicked()
 	}
 
 	// ApplyFixes rescans once at the end, which triggers Refresh() through OnChanged.
+	const int32 NumFixed = ToFix.Num();
 	Model->ApplyFixes(ToFix);
+
+	if (NumFixed > 0)
+	{
+		FNotificationInfo Info(FText::Format(LOCTEXT("FixedToast", "Applied {0} fix(es)."), FText::AsNumber(NumFixed)));
+		Info.ExpireDuration = 4.0f;
+		Info.bUseSuccessFailIcons = true;
+		if (const TSharedPtr<SNotificationItem> Item = FSlateNotificationManager::Get().AddNotification(Info))
+		{
+			Item->SetCompletionState(SNotificationItem::CS_Success);
+		}
+	}
 	return FReply::Handled();
 }
 

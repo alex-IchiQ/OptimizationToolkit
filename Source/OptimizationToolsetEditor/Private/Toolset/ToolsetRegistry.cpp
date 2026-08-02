@@ -23,7 +23,6 @@
 
 #include "Toolset/Cleanup/Actions/SaveDirtyPackagesAction.h"
 #include "Toolset/Cleanup/Actions/FixUpRedirectorsAction.h"
-#include "Toolset/Cleanup/Actions/DeleteUnusedAssetsAction.h"
 
 FToolsetRegistry& FToolsetRegistry::Get()
 {
@@ -61,7 +60,6 @@ void FToolsetRegistry::RegisterDefaults()
 
 	AddAction(MakeUnique<FSaveDirtyPackagesAction>());
 	AddAction(MakeUnique<FFixUpRedirectorsAction>());
-	AddAction(MakeUnique<FDeleteUnusedAssetsAction>());
 }
 
 void FToolsetRegistry::AddPass(TUniquePtr<IAnalyzePass> Pass)

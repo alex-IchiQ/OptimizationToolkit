@@ -1,6 +1,7 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "Toolset/Slate/SAnalyzerView.h"
+#include "Toolset/Slate/OptimizeStyle.h"
 
 #include "Editor.h"
 #include "Misc/ScopedSlowTask.h"
@@ -53,7 +54,10 @@ namespace
 		{
 			OnCell = InArgs._OnCell;
 			SMultiColumnTableRow<TSharedPtr<ItemType>>::Construct(
-				typename SMultiColumnTableRow<TSharedPtr<ItemType>>::FSuperRowType::FArguments().Padding(FMargin(0, 1)), OwnerTable);
+				typename SMultiColumnTableRow<TSharedPtr<ItemType>>::FSuperRowType::FArguments()
+					.Style(&FOptimizeStyle::Get(), "Opt.TableRow")
+					.Padding(FMargin(0, 1)),
+				OwnerTable);
 		}
 
 		virtual TSharedRef<SWidget> GenerateWidgetForColumn(const FName& Column) override
@@ -120,7 +124,7 @@ namespace
 							return SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)
 							[
 								SNew(SButton)
-								.ButtonStyle(&FAppStyle::Get(), "SimpleButton")
+								.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Icon")
 								.ContentPadding(FMargin(4, 2))
 								.ToolTipText(LOCTEXT("ShowAsset", "Show Asset"))
 								.OnClicked_Lambda([Path]() { BrowseToAsset(Path); return FReply::Handled(); })
@@ -139,6 +143,7 @@ namespace
 						return SNew(SBox).VAlign(VAlign_Center).Padding(FMargin(6, 0))
 						[
 							SNew(STextBlock)
+							.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body")
 							.Text(Column->Get(*ItemPtr))
 							.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
 							.Justification(Column->Align == HAlign_Right ? ETextJustify::Right
@@ -249,7 +254,8 @@ void SAnalyzerView::Construct(const FArguments& InArgs)
 		+ SVerticalBox::Slot().FillHeight(1.0f).Padding(FMargin(12, 0, 12, 10))
 		[
 			SNew(SBorder)
-			.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+			.BorderImage(FOptimizeStyle::Brush("Opt.Card"))
+			.Padding(FMargin(4))
 			[
 				SAssignNew(ListSwitcher, SWidgetSwitcher)
 				+ SWidgetSwitcher::Slot()[ BuildList<FMemoryTextureRow>(Textures.ToSharedRef()) ]
@@ -265,14 +271,14 @@ void SAnalyzerView::Construct(const FArguments& InArgs)
 TSharedRef<SWidget> SAnalyzerView::BuildSummary()
 {
 	return SNew(SBorder)
-		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-		.Padding(FMargin(12, 10))
+		.BorderImage(FOptimizeStyle::Brush("Opt.Card"))
+		.Padding(FMargin(16, 14))
 		[
 			SNew(SVerticalBox)
 
 			+ SVerticalBox::Slot().AutoHeight()
 			[
-				SNew(STextBlock).Text(this, &SAnalyzerView::GetHeadlineText).AutoWrapText(true)
+				SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body").Text(this, &SAnalyzerView::GetHeadlineText).AutoWrapText(true)
 			]
 
 			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 12, 0, 0))[ SAssignNew(RoleBarBox, SVerticalBox) ]
@@ -423,14 +429,17 @@ void SAnalyzerView::RebuildBars()
 TSharedRef<SWidget> SAnalyzerView::MakeTabButton(EAnalyzerTab Tab, const FText& Label)
 {
 	return SNew(SButton)
-		.ContentPadding(FMargin(12, 5))
-		.ButtonColorAndOpacity_Lambda([this, Tab]()
-		{
-			return CurrentTab == Tab ? FStyleColors::Primary : FSlateColor(FLinearColor::White);
-		})
+		.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Secondary")
 		.OnClicked_Lambda([this, Tab]() { SelectTab(Tab); return FReply::Handled(); })
 		[
-			SNew(STextBlock).Text(Label)
+			SNew(STextBlock)
+			.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body")
+			.Text(Label)
+			// The active tab reads in accent.
+			.ColorAndOpacity_Lambda([this, Tab]()
+			{
+				return CurrentTab == Tab ? FSlateColor(FOptimizeStyle::Accent) : FSlateColor(FOptimizeStyle::TextPrimary);
+			})
 		];
 }
 

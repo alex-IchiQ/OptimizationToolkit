@@ -6,18 +6,17 @@
 #include "Toolset/ToolsetTypes.h"
 
 /**
- * Everything the panels know about the level, and the only thing they share.
+ * Everything the views know about the level, and the only thing they share.
  *
  * The registry keeps *features* from knowing about each other or the UI; this
- * keeps the *panels* from knowing about each other. Before it existed, the scan
- * result and the filters were fields on SToolsetWindow, so every panel that
+ * keeps the *views* from knowing about each other. Before it existed, the scan
+ * result and the filters lived on the main window widget, so every view that
  * needed them had to be built by that window — which is how one widget grew to
- * six panels and 1800 lines. A panel now takes the model and nothing else.
+ * six panels and 1800 lines. A view now takes the model and nothing else.
  *
  * Views react through OnChanged() rather than being poked by whoever caused the
- * change: a fix applied in Optimize moves the Dashboard's numbers, the nav's
- * badges and the findings tree, and none of those should have to be listed at the
- * call site.
+ * change: a fix applied in Optimize moves the Dashboard's numbers and the
+ * findings tree, and none of those should have to be listed at the call site.
  *
  * Not a UObject and not exported: it is plain state, and MODULE_API on a class
  * holding move-only members is the dllexport trap FToolsetRegistry already hit.

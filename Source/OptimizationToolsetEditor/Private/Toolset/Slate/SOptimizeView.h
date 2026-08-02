@@ -82,16 +82,14 @@ struct FOptimizeNode
 };
 
 /**
- * A fresh, deliberately default-styled Optimize page, built alongside the existing
- * toolset UI rather than replacing it so the two can be compared and iterated on
- * independently.
+ * The Optimize page: a deliberately default-styled level workspace.
  *
  * Vertical master-detail: a level -> problem-type tree on top, a checkable list of
  * the affected assets for the selected problem below it, and a single Apply button
- * at the bottom that fixes the ticked assets in one transaction batch.
+ * at the bottom that applies the ticked fixes and rescans once afterward.
  *
- * Owns its own FToolsetModel: it is a standalone tab, not a panel inside the main
- * window, so it scans and fixes on its own.
+ * Reads and fixes through the shared model handed in by the shell, so a scan or a
+ * fix here redraws every other page too.
  */
 class SOptimizeView : public SCompoundWidget
 {

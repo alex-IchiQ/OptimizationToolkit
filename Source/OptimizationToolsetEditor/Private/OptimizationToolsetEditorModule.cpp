@@ -1,9 +1,8 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "OptimizationToolsetEditorModule.h"
-#include "Toolset/ToolsetStyle.h"
-#include "Toolset/SToolsetWindow.h"
 #include "Toolset/ToolsetRegistry.h"
+#include "Toolset/Slate/OptimizeStyle.h"
 #include "Toolset/Slate/SOptimizeShell.h"
 
 #include "Framework/Docking/TabManager.h"
@@ -17,24 +16,16 @@
 #define LOCTEXT_NAMESPACE "OptimizationToolset"
 
 static const FName ToolsetTabName("OptimizationToolset");
-static const FName OptimizeViewTabName("OptimizationToolsetOptimizeView");
 
 void FOptimizationToolsetEditorModule::StartupModule()
 {
-	FToolsetStyle::Initialize();
+	FOptimizeStyle::Initialize();
 	FToolsetRegistry::Get().RegisterDefaults();
 
 	// Register the dockable tab.
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(ToolsetTabName, FOnSpawnTab::CreateRaw(this, &FOptimizationToolsetEditorModule::SpawnToolsetTab))
 		.SetDisplayName(LOCTEXT("TabTitle", "Optimization Toolset"))
 		.SetTooltipText(LOCTEXT("TabTooltip", "Analyze, optimize and profile the current level."))
-		.SetGroup(WorkspaceMenu::GetMenuStructure().GetToolsCategory())
-		.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.StatsViewer"));
-
-	// Parallel tab for the new-UI Optimize view, kept separate so both can run.
-	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(OptimizeViewTabName, FOnSpawnTab::CreateRaw(this, &FOptimizationToolsetEditorModule::SpawnOptimizeViewTab))
-		.SetDisplayName(LOCTEXT("OptimizeViewTabTitle", "Optimize (New UI)"))
-		.SetTooltipText(LOCTEXT("OptimizeViewTabTooltip", "Work-in-progress Optimize page: level tree, affected assets, batch fix."))
 		.SetGroup(WorkspaceMenu::GetMenuStructure().GetToolsCategory())
 		.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.StatsViewer"));
 
@@ -50,10 +41,9 @@ void FOptimizationToolsetEditorModule::ShutdownModule()
 	if (FSlateApplication::IsInitialized())
 	{
 		FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(ToolsetTabName);
-		FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(OptimizeViewTabName);
 	}
 
-	FToolsetStyle::Shutdown();
+	FOptimizeStyle::Shutdown();
 }
 
 void FOptimizationToolsetEditorModule::OpenToolsetTab()
@@ -61,21 +51,7 @@ void FOptimizationToolsetEditorModule::OpenToolsetTab()
 	FGlobalTabmanager::Get()->TryInvokeTab(ToolsetTabName);
 }
 
-void FOptimizationToolsetEditorModule::OpenOptimizeViewTab()
-{
-	FGlobalTabmanager::Get()->TryInvokeTab(OptimizeViewTabName);
-}
-
 TSharedRef<SDockTab> FOptimizationToolsetEditorModule::SpawnToolsetTab(const FSpawnTabArgs& Args)
-{
-	return SNew(SDockTab)
-		.TabRole(ETabRole::NomadTab)
-		[
-			SNew(SToolsetWindow)
-		];
-}
-
-TSharedRef<SDockTab> FOptimizationToolsetEditorModule::SpawnOptimizeViewTab(const FSpawnTabArgs& Args)
 {
 	return SNew(SDockTab)
 		.TabRole(ETabRole::NomadTab)
@@ -98,13 +74,6 @@ void FOptimizationToolsetEditorModule::RegisterMenus()
 			LOCTEXT("MenuEntryTip", "Open the Optimization / Profiling Toolset."),
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.StatsViewer"),
 			FUIAction(FExecuteAction::CreateRaw(this, &FOptimizationToolsetEditorModule::OpenToolsetTab)));
-
-		Section.AddMenuEntry(
-			"OpenOptimizationToolsetOptimizeView",
-			LOCTEXT("MenuEntryNew", "Optimize (New UI)"),
-			LOCTEXT("MenuEntryNewTip", "Open the work-in-progress Optimize page."),
-			FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.StatsViewer"),
-			FUIAction(FExecuteAction::CreateRaw(this, &FOptimizationToolsetEditorModule::OpenOptimizeViewTab)));
 	}
 
 	// Level Editor toolbar button.

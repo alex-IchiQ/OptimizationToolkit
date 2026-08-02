@@ -15,7 +15,10 @@
 #include "Modules/ModuleManager.h"
 #include "ObjectTools.h"
 #include "Toolset/Cleanup/ICleanupAction.h"
+#include "Toolset/Slate/OptimizeStyle.h"
 #include "Toolset/ToolsetRegistry.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
 #include "Styling/StyleColors.h"
@@ -50,8 +53,7 @@ namespace
 	/**
 	 * Packages named by project settings rather than referenced by an asset — the
 	 * default maps, game mode and game instance live as config paths, so nothing on
-	 * disk references them and they must never be called unused. (Same guard the
-	 * Delete Unused action uses.)
+	 * disk references them and they must never be called unused.
 	 */
 	TSet<FString> GatherConfigNamedPackages()
 	{
@@ -106,6 +108,19 @@ namespace
 		}
 		return 0;
 	}
+
+	/** A bottom-right editor toast, like the engine's own action feedback. */
+	void ShowToast(const FText& Message, bool bSuccess)
+	{
+		FNotificationInfo Info(Message);
+		Info.ExpireDuration = 4.0f;
+		Info.bFireAndForget = true;
+		Info.bUseSuccessFailIcons = true;
+		if (const TSharedPtr<SNotificationItem> Item = FSlateNotificationManager::Get().AddNotification(Info))
+		{
+			Item->SetCompletionState(bSuccess ? SNotificationItem::CS_Success : SNotificationItem::CS_Fail);
+		}
+	}
 }
 
 void SCleanupView::Construct(const FArguments& InArgs)
@@ -117,30 +132,38 @@ void SCleanupView::Construct(const FArguments& InArgs)
 	[
 		SNew(SVerticalBox)
 
-		// Top bar: summary (the Scan action lives in the shell now).
-		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(6, 6, 6, 4))
+		// Top bar: summary on the left, last project-action result on the right.
+		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(8, 8, 8, 4))
 		[
-			SNew(STextBlock).Text(this, &SCleanupView::GetSummaryText)
+			SNew(SHorizontalBox)
+
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body").Text(this, &SCleanupView::GetSummaryText)
+			]
+
+			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center).Padding(FMargin(12, 0, 0, 0))
+			[
+				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
+				.Justification(ETextJustify::Right)
+				.Text_Lambda([this]() { return LastActionResult; })
+				.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
+			]
 		]
 
-		// Project-wide actions (fix up redirectors, save dirty packages).
-		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(6, 0, 6, 4))
-		[
-			BuildActionBar()
-		]
-
-		// Filter bar: kind buttons + type combo.
-		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(6, 0, 6, 4))
+		// Filter bar: kind buttons + type combo + search + project-wide actions.
+		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(8, 0, 8, 4))
 		[
 			SNew(SHorizontalBox)
 
 			+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0, 0, 3, 0))[ MakeKindButton(ECleanupFilter::All, LOCTEXT("FilterAll", "All")) ]
-			+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0, 0, 3, 0))[ MakeKindButton(ECleanupFilter::Duplicate, LOCTEXT("FilterDup", "Duplicate")) ]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0, 0, 3, 0))[ MakeKindButton(ECleanupFilter::Duplicate, LOCTEXT("FilterDup", "Possible duplicates")) ]
 			+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0, 0, 12, 0))[ MakeKindButton(ECleanupFilter::Unused, LOCTEXT("FilterUnused", "Unused")) ]
 
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 6, 0))
 			[
-				SNew(STextBlock).Text(LOCTEXT("GroupLabel", "Group:")).ColorAndOpacity(FSlateColor::UseSubduedForeground())
+				SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle").Text(LOCTEXT("GroupLabel", "Group:"))
 			]
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			[
@@ -156,19 +179,27 @@ void SCleanupView::Construct(const FArguments& InArgs)
 				]
 			]
 
-			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center).Padding(FMargin(12, 0, 0, 0))
+			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center).Padding(FMargin(12, 0, 12, 0))
 			[
 				SNew(SSearchBox)
 				.HintText(LOCTEXT("SearchHint", "Filter by name…"))
 				.OnTextChanged(this, &SCleanupView::OnSearchChanged)
 			]
+
+			// Project-wide actions (fix up redirectors, save dirty packages), on one
+			// line after the search box.
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				BuildActionBar()
+			]
 		]
 
 		// The list.
-		+ SVerticalBox::Slot().FillHeight(1.0f).Padding(FMargin(6, 0, 6, 6))
+		+ SVerticalBox::Slot().FillHeight(1.0f).Padding(FMargin(8, 0, 8, 6))
 		[
 			SNew(SBorder)
-			.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+			.BorderImage(FOptimizeStyle::Brush("Opt.Card"))
+			.Padding(FMargin(4))
 			[
 				SAssignNew(ListView, SListView<TSharedPtr<FCleanupEntry>>)
 				.ListItemsSource(&VisibleEntries)
@@ -200,16 +231,21 @@ void SCleanupView::Construct(const FArguments& InArgs)
 
 			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
 			[
-				SNew(STextBlock).Text(this, &SCleanupView::GetSelectionText)
+				SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle").Text(this, &SCleanupView::GetSelectionText)
 			]
 
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			[
 				SNew(SButton)
+				.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Primary")
 				.IsEnabled_Lambda([this]() { return IsDeleteEnabled(); })
+				.ToolTipText(LOCTEXT("DeleteTip", "Delete the ticked assets. Unreal re-checks references and offers force-delete first."))
 				.OnClicked(this, &SCleanupView::OnDeleteClicked)
 				[
-					SNew(STextBlock).Text(LOCTEXT("Delete", "Delete Selected"))
+					SNew(STextBlock)
+					.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.NavLabel")
+					.ColorAndOpacity(FSlateColor(FOptimizeStyle::OnAccent))
+					.Text(LOCTEXT("Delete", "Delete Selected"))
 				]
 			]
 		]
@@ -223,12 +259,20 @@ void SCleanupView::BuildEntries()
 {
 	AllEntries.Reset();
 	CheckedEntries.Reset();	// old rows are gone; their pointers no longer mean anything
+	ScanState = ECleanupScanState::NotScanned;
+	GroupFilter.Reset();
+	GroupOptions.Reset();
+	GroupOptions.Add(MakeShared<EAssetCategory>(EAssetCategory::Count));
+	if (GroupCombo.IsValid())
+	{
+		GroupCombo->RefreshOptions();
+	}
 
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
 	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
 	if (AssetRegistry.IsLoadingAssets())
 	{
-		bHasScanned = true;	// so the summary can explain why it's empty
+		ScanState = ECleanupScanState::RegistryBusy;
 		ApplyFilters();
 		return;
 	}
@@ -248,7 +292,7 @@ void SCleanupView::BuildEntries()
 
 	const TSet<FString> ConfigNamed = GatherConfigNamedPackages();
 
-	// Working record per non-excluded asset, so unused and duplicate share one walk.
+	// Working record per non-excluded asset, so both checks share one registry walk.
 	struct FWorking
 	{
 		FAssetData Asset;
@@ -262,11 +306,13 @@ void SCleanupView::BuildEntries()
 
 	FScopedSlowTask SlowTask(Assets.Num(), LOCTEXT("Scanning", "Scanning project assets..."));
 	SlowTask.MakeDialog(true);
+	bool bCancelled = false;
 
 	for (const FAssetData& Asset : Assets)
 	{
 		if (SlowTask.ShouldCancel())
 		{
+			bCancelled = true;
 			break;
 		}
 		SlowTask.EnterProgressFrame(1);
@@ -300,13 +346,26 @@ void SCleanupView::BuildEntries()
 		Candidates.Add({ Asset, Type, Category, FPackageName::GetLongPackagePath(PackagePath), Size });
 	}
 
-	// --- Duplicates: same base name + type + size, across two or more folders. ---
+	if (bCancelled)
+	{
+		// Never present a partial registry walk as a trustworthy cleanup result.
+		AllEntries.Reset();
+		ScanState = ECleanupScanState::Cancelled;
+		ApplyFilters();
+		return;
+	}
+
+	// --- Possible duplicates: same base name + type + size, across folders. -----
 	// A name heuristic, not a content hash: it catches the same pack re-imported
 	// into different folders, which is the common real duplicate.
 	TMap<FString, TArray<int32>> Groups;
 	for (int32 Index = 0; Index < Candidates.Num(); ++Index)
 	{
 		const FWorking& Candidate = Candidates[Index];
+		if (Candidate.Size <= 0)
+		{
+			continue; // without a trustworthy size, name + type alone is too weak
+		}
 		const FString BaseName = FPackageName::GetShortName(Candidate.Asset.PackageName).ToLower();
 		const FString Key = FString::Printf(TEXT("%s|%s|%lld"), *BaseName, *Candidate.Type, Candidate.Size);
 		Groups.FindOrAdd(Key).Add(Index);
@@ -370,7 +429,7 @@ void SCleanupView::BuildEntries()
 		GroupCombo->RefreshOptions();
 	}
 
-	bHasScanned = true;
+	ScanState = ECleanupScanState::Complete;
 	ApplyFilters();
 }
 
@@ -420,15 +479,27 @@ void SCleanupView::OnSearchChanged(const FText& NewText)
 
 TSharedRef<SWidget> SCleanupView::MakeKindButton(ECleanupFilter Filter, const FText& Label)
 {
+	FText Tooltip;
+	switch (Filter)
+	{
+	case ECleanupFilter::Duplicate: Tooltip = LOCTEXT("TipDup", "Possible matches with the same name, type and size across two or more folders. Review before deleting."); break;
+	case ECleanupFilter::Unused:    Tooltip = LOCTEXT("TipUnused", "No asset references it in any dependency category (excludes maps, redirectors, config-named)."); break;
+	default:                        Tooltip = LOCTEXT("TipAllKinds", "Show both possible duplicates and unused assets."); break;
+	}
+
 	return SNew(SButton)
-		.ContentPadding(FMargin(10, 4))
-		.ButtonColorAndOpacity_Lambda([this, Filter]()
-		{
-			return KindFilter == Filter ? FStyleColors::Primary : FSlateColor(FLinearColor::White);
-		})
+		.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Secondary")
+		.ToolTipText(Tooltip)
 		.OnClicked_Lambda([this, Filter]() { SetKindFilter(Filter); return FReply::Handled(); })
 		[
-			SNew(STextBlock).Text(Label)
+			SNew(STextBlock)
+			.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body")
+			.Text(Label)
+			// The active filter reads in accent.
+			.ColorAndOpacity_Lambda([this, Filter]()
+			{
+				return KindFilter == Filter ? FSlateColor(FOptimizeStyle::Accent) : FSlateColor(FOptimizeStyle::TextPrimary);
+			})
 		];
 }
 
@@ -487,7 +558,11 @@ TSharedRef<ITableRow> SCleanupView::GenerateRow(TSharedPtr<FCleanupEntry> Entry,
 		void Construct(const FArguments& InArgs, const TSharedRef<STableViewBase>& InOwner)
 		{
 			OnCell = InArgs._OnCell;
-			SMultiColumnTableRow::Construct(FSuperRowType::FArguments().Padding(FMargin(0, 2)), InOwner);
+			SMultiColumnTableRow::Construct(
+				FSuperRowType::FArguments()
+					.Style(&FOptimizeStyle::Get(), "Opt.TableRow")
+					.Padding(FMargin(0, 2)),
+				InOwner);
 		}
 
 		virtual TSharedRef<SWidget> GenerateWidgetForColumn(const FName& Column) override
@@ -525,7 +600,7 @@ TSharedRef<SWidget> SCleanupView::GenerateCell(const FName& ColumnId, TSharedPtr
 		return SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)
 		[
 			SNew(SButton)
-			.ButtonStyle(&FAppStyle::Get(), "SimpleButton")
+			.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Icon")
 			.ContentPadding(FMargin(4, 2))
 			.ToolTipText(LOCTEXT("ShowAsset", "Show Asset"))
 			.OnClicked_Lambda([Entry]()
@@ -567,13 +642,14 @@ TSharedRef<SWidget> SCleanupView::GenerateCell(const FName& ColumnId, TSharedPtr
 	else if (ColumnId == CleanupColumns::Note)
 	{
 		Text = Entry->Kind == ECleanupKind::Duplicate
-			? FText::Format(LOCTEXT("DupNote", "Duplicate · {0} copies"), FText::AsNumber(Entry->DuplicateGroupSize))
+			? FText::Format(LOCTEXT("DupNote", "Possible duplicate · {0} matches"), FText::AsNumber(Entry->DuplicateGroupSize))
 			: LOCTEXT("UnusedNote", "No references");
 	}
 
 	return SNew(SBox).VAlign(VAlign_Center).Padding(FMargin(6, 0))
 	[
 		SNew(STextBlock)
+		.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body")
 		.Text(Text)
 		.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
 		.Justification(Align == HAlign_Right ? ETextJustify::Right : ETextJustify::Left)
@@ -587,34 +663,27 @@ TSharedRef<SWidget> SCleanupView::BuildActionBar()
 {
 	TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox);
 
-	// Registry-driven, minus Delete Unused — this page does its own delete.
+	// Independent registry-driven maintenance actions. Reviewed asset deletion is
+	// owned by this page rather than duplicated as a registry action.
 	for (const TUniquePtr<ICleanupAction>& Action : FToolsetRegistry::Get().GetActions())
 	{
-		if (!Action || !Action->IsSupported() || Action->GetId() == TEXT("Cleanup_DeleteUnusedAssets"))
+		if (!Action || !Action->IsSupported())
 		{
 			continue;
 		}
 
 		const ICleanupAction* ActionPtr = Action.Get();	// registry owns it; outlives the button
-		Row->AddSlot().AutoWidth().Padding(FMargin(0, 0, 4, 0))
+		Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(4, 0, 0, 0))
 		[
 			SNew(SButton)
+			.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Secondary")
 			.ToolTipText(Action->GetDescription())
 			.OnClicked(this, &SCleanupView::OnRunAction, ActionPtr)
 			[
-				SNew(STextBlock).Text(Action->GetButtonLabel())
+				SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body").Text(Action->GetButtonLabel())
 			]
 		];
 	}
-
-	// Last-run summary, so a fire-and-forget action still reports what it did.
-	Row->AddSlot().FillWidth(1.0f).VAlign(VAlign_Center).Padding(FMargin(10, 0, 0, 0))
-	[
-		SNew(STextBlock)
-		.Text_Lambda([this]() { return LastActionResult; })
-		.ColorAndOpacity(FSlateColor::UseSubduedForeground())
-		.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
-	];
 
 	return Row;
 }
@@ -642,6 +711,7 @@ FReply SCleanupView::OnRunAction(const ICleanupAction* Action)
 	SlowTask.MakeDialog();
 
 	LastActionResult = Action->Execute();
+	ShowToast(FText::Format(LOCTEXT("ActionDone", "{0}: {1}"), Action->GetTitle(), LastActionResult), true);
 	return FReply::Handled();
 }
 
@@ -713,10 +783,12 @@ bool SCleanupView::IsDeleteEnabled() const
 FReply SCleanupView::OnDeleteClicked()
 {
 	TArray<FAssetData> ToDelete;
+	TSet<FName> AddedPackages;
 	for (const TSharedPtr<FCleanupEntry>& Entry : CheckedEntries)
 	{
-		if (Entry.IsValid())
+		if (Entry.IsValid() && !AddedPackages.Contains(Entry->Asset.PackageName))
 		{
+			AddedPackages.Add(Entry->Asset.PackageName);
 			ToDelete.Add(Entry->Asset);
 		}
 	}
@@ -728,7 +800,11 @@ FReply SCleanupView::OnDeleteClicked()
 	// Unreal's own dialog lists everything, re-checks references at delete time and
 	// offers force delete — hand-rolling that would be worse in every way. After it,
 	// rescan so the lists reflect what actually went.
-	ObjectTools::DeleteAssets(ToDelete, /*bShowConfirmation*/ true);
+	const int32 NumDeleted = ObjectTools::DeleteAssets(ToDelete, /*bShowConfirmation*/ true);
+	if (NumDeleted > 0)
+	{
+		ShowToast(FText::Format(LOCTEXT("DeletedToast", "Deleted {0} asset(s)."), FText::AsNumber(NumDeleted)), true);
+	}
 	BuildEntries();
 	return FReply::Handled();
 }
@@ -740,9 +816,16 @@ FText SCleanupView::GetSelectionText() const
 
 FText SCleanupView::GetSummaryText() const
 {
-	if (!bHasScanned)
+	switch (ScanState)
 	{
-		return LOCTEXT("NoScan", "No scan yet — press Scan Project.");
+	case ECleanupScanState::NotScanned:
+		return LOCTEXT("NoScan", "No scan yet — press Scan.");
+	case ECleanupScanState::RegistryBusy:
+		return LOCTEXT("RegistryBusy", "Asset Registry is still scanning — try again when it finishes.");
+	case ECleanupScanState::Cancelled:
+		return LOCTEXT("ScanCancelled", "Project scan cancelled — no partial results are shown.");
+	default:
+		break;
 	}
 
 	int32 Duplicates = 0;
@@ -751,7 +834,7 @@ FText SCleanupView::GetSummaryText() const
 	{
 		(Entry->Kind == ECleanupKind::Duplicate ? Duplicates : Unused)++;
 	}
-	return FText::Format(LOCTEXT("SummaryFmt", "{0} duplicate · {1} unused"),
+	return FText::Format(LOCTEXT("SummaryFmt", "{0} possible duplicate · {1} unused"),
 		FText::AsNumber(Duplicates), FText::AsNumber(Unused));
 }
 

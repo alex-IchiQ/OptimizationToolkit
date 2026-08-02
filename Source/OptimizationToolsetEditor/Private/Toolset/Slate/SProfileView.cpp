@@ -1,6 +1,7 @@
 // Copyright Optimization Toolset. All Rights Reserved.
 
 #include "Toolset/Slate/SProfileView.h"
+#include "Toolset/Slate/OptimizeStyle.h"
 
 #include "Editor.h"
 #include "Engine/World.h"
@@ -25,8 +26,11 @@
 namespace
 {
 	/**
-	 * Command strings verified against UE 5.7 source (see the old SProfilePanel for
-	 * the origin of each). A wrong string fails silently, so these are not guessed.
+	 * Command strings verified against UE 5.7 source, not guessed: a wrong string
+	 * fails silently, the worst failure for a button whose whole job is to change
+	 * what you see. Origins: r.Nanite.Visualize (NaniteVisualizationData.h),
+	 * r.Lumen.Visualize.ViewMode (LumenVisualizationData.h), r.Shadow.Virtual.Visualize
+	 * (VirtualShadowMapVisualizationData.h), with mode names from each AddVisualizationMode().
 	 */
 	TArray<FProfileAction> MakeStatActions()
 	{
@@ -287,19 +291,18 @@ TSharedRef<SWidget> SProfileView::MakeSection(const FText& Title, const FText& H
 	}
 
 	return SNew(SBorder)
-		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-		.Padding(FMargin(10, 8))
+		.BorderImage(FOptimizeStyle::Brush("Opt.Card"))
+		.Padding(FMargin(16, 14))
 		[
 			SNew(SVerticalBox)
 
 			+ SVerticalBox::Slot().AutoHeight()
 			[
-				SNew(STextBlock).Text(Title).Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
+				SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Heading").Text(Title)
 			]
-			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 3, 0, 10))
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 3, 0, 12))
 			[
-				SNew(STextBlock).Text(Hint).AutoWrapText(true)
-				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+				SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle").Text(Hint).AutoWrapText(true)
 			]
 			+ SVerticalBox::Slot().AutoHeight()
 			[
@@ -315,39 +318,44 @@ TSharedRef<SWidget> SProfileView::MakeActionButton(const FProfileAction& Action)
 	const FText Tooltip = Action.Tooltip.IsEmpty() ? FText::FromString(Action.Command) : Action.Tooltip;
 
 	return SNew(SButton)
+		.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Secondary")
 		.HAlign(HAlign_Center)
-		.ContentPadding(FMargin(8, 6))
 		.ToolTipText(Tooltip)
-		// Active actions tint toward the editor accent so it's visible at a glance
-		// what the viewport is currently showing.
-		.ButtonColorAndOpacity_Lambda([Action]()
-		{
-			return IsActionActive(Action) ? FStyleColors::Primary : FSlateColor(FLinearColor::White);
-		})
 		.OnClicked_Lambda([Action]() { RunAction(Action); return FReply::Handled(); })
 		[
-			SNew(STextBlock).Text(Action.Label).Justification(ETextJustify::Center).AutoWrapText(true)
+			SNew(STextBlock)
+			.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body")
+			.Text(Action.Label)
+			.Justification(ETextJustify::Center)
+			.AutoWrapText(true)
+			// Active actions read in accent so it's visible at a glance what the
+			// viewport is currently showing.
+			.ColorAndOpacity_Lambda([Action]()
+			{
+				return IsActionActive(Action) ? FSlateColor(FOptimizeStyle::Accent) : FSlateColor(FOptimizeStyle::TextPrimary);
+			})
 		];
 }
 
 TSharedRef<SWidget> SProfileView::BuildCustomCommandCard()
 {
 	return SNew(SBorder)
-		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-		.Padding(FMargin(10, 8))
+		.BorderImage(FOptimizeStyle::Brush("Opt.Card"))
+		.Padding(FMargin(16, 14))
 		[
 			SNew(SVerticalBox)
 
 			+ SVerticalBox::Slot().AutoHeight()
 			[
-				SNew(STextBlock).Text(LOCTEXT("SecCustom", "Console command"))
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
+				SNew(STextBlock).TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Heading")
+				.Text(LOCTEXT("SecCustom", "Console command"))
 			]
-			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 3, 0, 10))
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 3, 0, 12))
 			[
 				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
 				.Text(LOCTEXT("SecCustomHint", "Anything the buttons above don't cover, run against the editor world."))
-				.AutoWrapText(true).ColorAndOpacity(FSlateColor::UseSubduedForeground())
+				.AutoWrapText(true)
 			]
 			+ SVerticalBox::Slot().AutoHeight()
 			[
@@ -371,9 +379,13 @@ TSharedRef<SWidget> SProfileView::BuildCustomCommandCard()
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(8, 0, 0, 0))
 				[
 					SNew(SButton)
+					.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Primary")
 					.OnClicked_Lambda([this]() { RunAction({ FText::GetEmpty(), CustomCommand }); return FReply::Handled(); })
 					[
-						SNew(STextBlock).Text(LOCTEXT("RunCmd", "Run"))
+						SNew(STextBlock)
+						.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.NavLabel")
+						.ColorAndOpacity(FSlateColor(FOptimizeStyle::OnAccent))
+						.Text(LOCTEXT("RunCmd", "Run"))
 					]
 				]
 			]
