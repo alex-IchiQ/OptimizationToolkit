@@ -1,4 +1,8 @@
-# Optimization / Profiling Toolset
+<p align="center">
+  <img src="Resources/Cover.png" alt="Optimization Toolkit" width="100%">
+</p>
+
+<h1 align="center">Optimization / Profiling Toolkit</h1>
 
 Editor-only Unreal Engine plugin for analyzing, optimizing and profiling loaded
 levels from one dockable Slate panel.
