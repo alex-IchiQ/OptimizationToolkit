@@ -1,4 +1,4 @@
-// Copyright Optimization Toolset. All Rights Reserved.
+// Copyright 2026 IchiQ (Aleksey Karpov). All Rights Reserved.
 
 #include "Toolset/Slate/SOptimizeView.h"
 #include "Toolset/Slate/OptimizeStyle.h"

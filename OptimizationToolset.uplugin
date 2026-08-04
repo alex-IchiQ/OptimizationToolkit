@@ -5,11 +5,12 @@
 	"FriendlyName": "Optimization / Profiling Toolset",
 	"Description": "Analyze, optimize and profile your levels from a single dockable panel. Severity-based level analysis, safe batch auto-fixes with full Undo/Redo, and one-click profiling stat stacks.",
 	"Category": "Optimization",
-	"CreatedBy": "",
-	"CreatedByURL": "",
-	"DocsURL": "",
+	"CreatedBy": "IchiQ(Aleksey Karpov)",
+	"CreatedByURL": "https://www.fab.com/sellers/IchiQ",
+	"DocsURL": "https://github.com/alex-IchiQ/OptimizationToolkit/blob/main/README.md",
 	"MarketplaceURL": "",
-	"SupportURL": "",
+	"SupportURL": "https://github.com/alex-IchiQ/OptimizationToolkit/issues",
+	"EngineVersion": "5.8.0",
 	"CanContainContent": true,
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
@@ -20,12 +21,6 @@
 			"Type": "Editor",
 			"LoadingPhase": "PostEngineInit",
 			"PlatformAllowList": [ "Win64", "Mac", "Linux" ]
-		}
-	],
-	"Plugins": [
-		{
-			"Name": "AssetManagerEditor",
-			"Enabled": true
 		}
 	]
 }

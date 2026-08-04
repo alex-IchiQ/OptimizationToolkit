@@ -1,4 +1,4 @@
-// Copyright Optimization Toolset. All Rights Reserved.
+// Copyright 2026 IchiQ (Aleksey Karpov). All Rights Reserved.
 
 #include "Toolset/Analyzer/Passes/StaticMeshPass.h"
 #include "Toolset/ToolsetCompat.h"

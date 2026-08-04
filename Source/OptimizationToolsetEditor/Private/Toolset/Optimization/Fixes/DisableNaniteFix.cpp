@@ -1,4 +1,4 @@
-// Copyright Optimization Toolset. All Rights Reserved.
+// Copyright 2026 IchiQ (Aleksey Karpov). All Rights Reserved.
 
 #include "Toolset/Optimization/Fixes/DisableNaniteFix.h"
 #include "Toolset/Optimization/Fixes/FixUtils.h"

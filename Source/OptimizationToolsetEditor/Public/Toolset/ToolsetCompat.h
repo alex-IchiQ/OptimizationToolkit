@@ -1,4 +1,4 @@
-// Copyright Optimization Toolset. All Rights Reserved.
+// Copyright 2026 IchiQ (Aleksey Karpov). All Rights Reserved.
 
 #pragma once
 
@@ -7,7 +7,7 @@
 /**
  * Engine-version gating helpers.
  *
- * The plugin targets a wide UE range (5.3 - 5.7). Some APIs (VSM controls,
+ * The plugin targets a wide UE range (5.3 - 5.8). Some APIs (VSM controls,
  * newer VRS/TSR knobs, Nanite tessellation, etc.) only exist on recent
  * engines, so feature code is wrapped in the macros below. On FAB every
  * engine version is shipped as its own build from this same source tree —
@@ -25,6 +25,7 @@
 #define OPTIMIZATION_HAS_NANITE         OPTIMIZATION_UE_VERSION_AT_LEAST(5, 0)
 #define OPTIMIZATION_HAS_VSM_CONTROLS   OPTIMIZATION_UE_VERSION_AT_LEAST(5, 4)
 #define OPTIMIZATION_HAS_MODERN_TSR     OPTIMIZATION_UE_VERSION_AT_LEAST(5, 3)
+#define OPTIMIZATION_HAS_SKINNING_SHADER_SUPPORT_MODE OPTIMIZATION_UE_VERSION_AT_LEAST(5, 8)
 
 /**
  * 5.7 deprecated `UMaterialInterface::GetMaterialResource(ERHIFeatureLevel::Type, ...)`
