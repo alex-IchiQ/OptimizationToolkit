@@ -4,6 +4,8 @@
 
 <h1 align="center">Optimization / Profiling Toolkit</h1>
 
+👉 **[Buy on Unreal Engine Marketplace / Fab](https://www.fab.com/sellers/IchiQ)**
+
 Editor-only Unreal Engine plugin for analyzing, optimizing and profiling loaded
 levels from one dockable Slate panel.
 
