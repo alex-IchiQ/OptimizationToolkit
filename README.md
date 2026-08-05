@@ -11,7 +11,7 @@ levels from one dockable Slate panel.
 
 ## Requirements
 
-- Unreal Engine 5.3–5.7. Version-sensitive APIs are gated in
+- Unreal Engine 5.3–5.8. Version-sensitive APIs are gated in
   `ToolsetCompat.h`; each FAB package is built for one engine version.
 - Built-in `AssetManagerEditor` plugin. It supplies the disk-size data used by
   Blueprint dependency analysis and project cleanup.
@@ -23,6 +23,22 @@ levels from one dockable Slate panel.
    it on launch.
 3. Open **Optimization Toolset** from the **Optimize** toolbar button or
    **Window → Optimization Toolset**.
+
+## First use
+
+1. Open the map to review and load the sub-levels that should participate.
+2. Open the toolkit and select **Dashboard**.
+3. Review **Scanning Scope** and optionally adjust the analysis thresholds.
+4. Press **Scan** in the left sidebar.
+5. Review findings in **Optimize**. Navigate to the affected asset, actor, or
+   setting before applying a supported fix.
+6. Use **Analyzer** for loaded memory, **Profile** for viewport diagnostics, and
+   **Clean Up** for project-wide maintenance.
+
+The Dashboard contains the same Getting Started workflow, and the **Docs**
+button in the lower-left corner opens this documentation from inside the editor.
+For a focused installation and first-use guide, see
+[Docs/QuickStart.md](Docs/QuickStart.md).
 
 ## Current UI
 
@@ -65,8 +81,9 @@ Source/OptimizationToolsetEditor/
     ToolsetRegistry.cpp
 ```
 
-See [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md) for extension rules and
-[Docs/HANDOFF.md](Docs/HANDOFF.md) for current status and follow-up work.
+The packaged plugin includes this README and
+[Docs/QuickStart.md](Docs/QuickStart.md). `Config/FilterPlugin.ini` explicitly
+adds both documents to every packaged FAB build.
 
 ## Safety notes
 

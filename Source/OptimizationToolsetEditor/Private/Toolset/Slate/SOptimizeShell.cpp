@@ -9,6 +9,7 @@
 #include "Toolset/Slate/OptimizeStyle.h"
 #include "Toolset/ToolsetModel.h"
 
+#include "HAL/PlatformProcess.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
 #include "Styling/StyleDefaults.h"
@@ -128,14 +129,33 @@ TSharedRef<SWidget> SOptimizeShell::BuildNav()
 			]
 		]
 
-		// Footer version pinned to the very bottom.
+		// Footer version and an always-visible documentation entry point.
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(FMargin(8, 0, 8, 4))
 		[
-			SNew(STextBlock)
-			.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
-			.Text(LOCTEXT("Version", "v1.0.0"))
+			SNew(SHorizontalBox)
+
+			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
+				.Text(LOCTEXT("Version", "v1.0.0"))
+			]
+
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SNew(SButton)
+				.ButtonStyle(&FOptimizeStyle::Get(), "Opt.Button.Ghost")
+				.ContentPadding(FMargin(5, 3))
+				.ToolTipText(LOCTEXT("DocsTip", "Open installation, first-use and feature documentation."))
+				.OnClicked(this, &SOptimizeShell::OnDocumentationClicked)
+				[
+					SNew(STextBlock)
+					.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
+					.Text(LOCTEXT("Docs", "Docs"))
+				]
+			]
 		];
 }
 
@@ -235,6 +255,15 @@ FReply SOptimizeShell::OnScanClicked()
 	{
 		CleanupView->Scan();
 	}
+	return FReply::Handled();
+}
+
+FReply SOptimizeShell::OnDocumentationClicked()
+{
+	FPlatformProcess::LaunchURL(
+		TEXT("https://github.com/alex-IchiQ/OptimizationToolkit/blob/main/README.md"),
+		nullptr,
+		nullptr);
 	return FReply::Handled();
 }
 

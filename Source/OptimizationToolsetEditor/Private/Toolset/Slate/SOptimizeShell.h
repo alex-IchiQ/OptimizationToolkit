@@ -46,8 +46,9 @@ private:
 
 	/** One scan for the whole toolset: level analysis and the project sweep. */
 	FReply OnScanClicked();
+	FReply OnDocumentationClicked();
 
-	EOptimizeSection Current = EOptimizeSection::Optimize;
+	EOptimizeSection Current = EOptimizeSection::Dashboard;
 
 	/**
 	 * The one model the whole new UI shares. Dashboard and Optimize both read the

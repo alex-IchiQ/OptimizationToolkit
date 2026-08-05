@@ -68,6 +68,9 @@ public:
 	void Scan();
 
 private:
+	// ---- First use ----------------------------------------------------------
+	TSharedRef<SWidget> BuildGettingStartedCard();
+
 	// ---- Object counts ------------------------------------------------------
 	TSharedRef<SWidget> BuildStatsCard();
 	TSharedRef<SWidget> MakeStatCell(ELevelStat Stat);

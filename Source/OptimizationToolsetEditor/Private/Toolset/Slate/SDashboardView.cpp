@@ -43,8 +43,15 @@ void SDashboardView::Construct(const FArguments& InArgs)
 		[
 			SNew(SVerticalBox)
 
-			// 1. What the scanned level is (object counts).
+			// Always visible onboarding: installation is documented in the package,
+			// while these steps cover the first use directly in the editor.
 			+ SVerticalBox::Slot().AutoHeight()
+			[
+				BuildGettingStartedCard()
+			]
+
+			// 1. What the scanned level is (object counts).
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 10, 0, 0))
 			[
 				BuildStatsCard()
 			]
@@ -74,6 +81,60 @@ void SDashboardView::Construct(const FArguments& InArgs)
 			]
 		]
 	];
+}
+
+TSharedRef<SWidget> SDashboardView::BuildGettingStartedCard()
+{
+	auto Step = [](const FText& Number, const FText& Text)
+	{
+		return SNew(SHorizontalBox)
+
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Top).Padding(FMargin(0, 0, 8, 0))
+			[
+				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Heading")
+				.ColorAndOpacity(FSlateColor(FOptimizeStyle::Accent))
+				.Text(Number)
+			]
+
+			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Top)
+			[
+				SNew(STextBlock)
+				.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Body")
+				.AutoWrapText(true)
+				.Text(Text)
+			];
+	};
+
+	return MakeCard(
+		LOCTEXT("GettingStartedTitle", "Getting Started"),
+		SNew(SVerticalBox)
+
+		+ SVerticalBox::Slot().AutoHeight()
+		[
+			Step(LOCTEXT("StepOneNumber", "1."),
+				LOCTEXT("StepOne", "Open the map you want to review. Loaded sub-levels appear in Scanning Scope below and can be included or excluded."))
+		]
+
+		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 6, 0, 0))
+		[
+			Step(LOCTEXT("StepTwoNumber", "2."),
+				LOCTEXT("StepTwo", "Optionally adjust the analysis thresholds, then press Scan in the left sidebar."))
+		]
+
+		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 6, 0, 0))
+		[
+			Step(LOCTEXT("StepThreeNumber", "3."),
+				LOCTEXT("StepThree", "Review findings in Optimize. Navigate to the affected object or apply a supported fix; use Analyzer, Profile and Clean Up for deeper review."))
+		]
+
+		+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 8, 0, 0))
+		[
+			SNew(STextBlock)
+			.TextStyle(&FOptimizeStyle::Get(), "Opt.Text.Subtle")
+			.AutoWrapText(true)
+			.Text(LOCTEXT("GettingStartedDocs", "Use the Docs button in the lower-left corner for installation, safety notes and the complete workflow."))
+		]);
 }
 
 void SDashboardView::Scan()
