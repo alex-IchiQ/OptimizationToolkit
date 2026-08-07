@@ -65,8 +65,7 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 
 	for (AActor* Actor : Context.Actors)
 	{
-		TInlineComponentArray<UPrimitiveComponent*> PrimitiveComponents(Actor);
-		for (UPrimitiveComponent* Component : PrimitiveComponents)
+		for (TInlineComponentArray<UPrimitiveComponent*> PrimitiveComponents(Actor); UPrimitiveComponent* Component : PrimitiveComponents)
 		{
 			if (!Component)
 			{
@@ -122,12 +121,10 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 		}
 
 		const int32 LongestSide = FMath::Max(Width, Height);
-		const int32 EffectiveLongestSide = Texture->MaxTextureSize > 0
-			? FMath::Min(LongestSide, Texture->MaxTextureSize) : LongestSide;
+		const int32 EffectiveLongestSide = Texture->MaxTextureSize > 0 ? FMath::Min(LongestSide, Texture->MaxTextureSize) : LongestSide;
 		const bool bSpecialPurpose = IsSpecialPurposeTextureGroup(Texture->LODGroup);
 		const bool bPowerOfTwo = FMath::IsPowerOfTwo(Width) && FMath::IsPowerOfTwo(Height);
-		const FText Subject = FText::Format(
-			LOCTEXT("TextureSubject", "{0} ({1} x {2})"),
+		const FText Subject = FText::Format(LOCTEXT("TextureSubject", "{0} ({1} x {2})"),
 			FText::FromString(Texture->GetName()), FText::AsNumber(Width), FText::AsNumber(Height));
 
 		// --- Oversized ---------------------------------------------------------
@@ -137,16 +134,12 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 		// streaming data needed for the real answer isn't there — and says so, since
 		// the fallback genuinely cannot tell an 8k skybox from an 8k bolt.
 		const float* BestTexelFactor = BestTexelFactors.Find(Texture);
-		const bool bHaveDensity = BestTexelFactor != nullptr && *BestTexelFactor > 0.0f;
-
-		if (bHaveDensity)
+		if (const bool bHaveDensity = BestTexelFactor != nullptr && *BestTexelFactor > 0.0f)
 		{
 			const float Density = TexelsPerMetre(EffectiveLongestSide, *BestTexelFactor);
 			if (Density > T.TextureDensityBudget)
 			{
-				const ESeverity Severity = (Texture->VirtualTextureStreaming || bSpecialPurpose)
-					? ESeverity::Minor
-					: (Density > T.TextureDensityBudget * 2 ? ESeverity::Major : ESeverity::Minor);
+				const ESeverity Severity = (Texture->VirtualTextureStreaming || bSpecialPurpose) ? ESeverity::Minor : (Density > T.TextureDensityBudget * 2 ? ESeverity::Major : ESeverity::Minor);
 
 				FFinding F(TEXT("Texture.Oversized"), Severity, ECategory::Textures, EFindingScope::Asset,
 					LOCTEXT("OverDenseTextureTitle", "Texture resolution exceeds what the surface shows"), Subject);
@@ -161,8 +154,7 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 		}
 		else if (EffectiveLongestSide > T.OversizedTextureSize)
 		{
-			const ESeverity Severity = Texture->VirtualTextureStreaming || bSpecialPurpose
-				? ESeverity::Minor : ESeverity::Major;
+			const ESeverity Severity = Texture->VirtualTextureStreaming || bSpecialPurpose ? ESeverity::Minor : ESeverity::Major;
 			FFinding F(TEXT("Texture.Oversized"), Severity, ECategory::Textures, EFindingScope::Asset,
 				LOCTEXT("OversizedTextureTitle", "Texture exceeds the configured size limit"), Subject);
 			F.WhyItMatters = FText::Format(
@@ -195,11 +187,9 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 		// design and are left alone.
 		if (!bSpecialPurpose && Texture->NeverStream && !Texture->VirtualTextureStreaming)
 		{
-			const int64 FullBytes = Texture->CalcTextureMemorySizeEnum(TMC_AllMips);
-			if (FullBytes > NonStreamingBudgetBytes)
+			if (const int64 FullBytes = Texture->CalcTextureMemorySizeEnum(TMC_AllMips); FullBytes > NonStreamingBudgetBytes)
 			{
-				const ESeverity Severity = FullBytes > NonStreamingBudgetBytes * 4
-					? ESeverity::Major : ESeverity::Minor;
+				const ESeverity Severity = FullBytes > NonStreamingBudgetBytes * 4 ? ESeverity::Major : ESeverity::Minor;
 				FFinding F(TEXT("Texture.NonStreaming"), Severity, ECategory::Textures, EFindingScope::Asset,
 					LOCTEXT("NonStreamingTitle", "Large texture is set to never stream"), Subject);
 				F.WhyItMatters = FText::Format(
@@ -213,12 +203,10 @@ void FTexturePass::Run(const FLevelScanContext& Context, const FAnalyzeThreshold
 			}
 		}
 
-		if (!bSpecialPurpose && bPowerOfTwo && LongestSide >= 1024
-			&& Texture->MipGenSettings == TMGS_NoMipmaps && !Texture->VirtualTextureStreaming)
+		if (!bSpecialPurpose && bPowerOfTwo && LongestSide >= 1024 && Texture->MipGenSettings == TMGS_NoMipmaps && !Texture->VirtualTextureStreaming)
 		{
 			const ESeverity Severity = LongestSide >= 2048 ? ESeverity::Major : ESeverity::Minor;
-			FFinding F(TEXT("Texture.MipsDisabled"), Severity, ECategory::Textures, EFindingScope::Asset,
-				LOCTEXT("MissingTextureMipsTitle", "Large texture has mipmaps disabled"), Subject);
+			FFinding F(TEXT("Texture.MipsDisabled"), Severity, ECategory::Textures, EFindingScope::Asset, LOCTEXT("MissingTextureMipsTitle", "Large texture has mipmaps disabled"), Subject);
 			F.WhyItMatters = LOCTEXT("MissingTextureMipsWhy", "Rendering the full-resolution texture at every distance wastes bandwidth and can shimmer.");
 			F.HowToFix = LOCTEXT("MissingTextureMipsFix", "Use FromTextureGroup mip generation unless this asset intentionally requires exact texels.");
 			F.TargetActor = Pair.Value;

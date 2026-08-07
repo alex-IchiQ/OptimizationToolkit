@@ -57,26 +57,37 @@ namespace
 		return true;
 	}
 
-	int64 GetDiskSize(IAssetManagerEditorModule& EditorModule, IAssetRegistry& AssetRegistry, FName PackageName)
+	int64 GetDiskSize(IAssetManagerEditorModule& EditorModule, IAssetRegistry& AssetRegistry,
+		FName PackageName, TMap<FName, int64>& Cache)
 	{
+		if (const int64* Cached = Cache.Find(PackageName))
+		{
+			return *Cached;
+		}
+
 		TArray<FAssetData> AssetsInPackage;
 		AssetRegistry.GetAssetsByPackageName(PackageName, AssetsInPackage);
 		if (AssetsInPackage.IsEmpty())
 		{
+			Cache.Add(PackageName, 0);
 			return 0;
 		}
 
 		int64 Size = 0;
-		if (EditorModule.GetIntegerValueForCustomColumn(
-			AssetsInPackage[0], IAssetManagerEditorModule::DiskSizeName, Size) && Size > 0)
+		if (EditorModule.GetIntegerValueForCustomColumn(AssetsInPackage[0], IAssetManagerEditorModule::DiskSizeName, Size) && Size > 0)
 		{
+			Cache.Add(PackageName, Size);
 			return Size;
 		}
+		Cache.Add(PackageName, 0);
 		return 0;
 	}
 
 	/** Walks hard package references from Root, summing what each one costs. */
-	FChainResult GatherChain(IAssetManagerEditorModule& EditorModule, IAssetRegistry& AssetRegistry, FName Root)
+	FChainResult GatherChain(IAssetManagerEditorModule& EditorModule, IAssetRegistry& AssetRegistry, FName Root,
+		TMap<FName, int64>& DiskSizeCache,
+		TMap<FName, TArray<FName>>& DependencyCache,
+		TMap<FName, bool>& WalkableCache)
 	{
 		FChainResult Result;
 
@@ -103,8 +114,7 @@ namespace
 			// is not part of what it drags in.
 			if (PackageName != Root)
 			{
-				const int64 Bytes = GetDiskSize(EditorModule, AssetRegistry, PackageName);
-				if (Bytes > 0)
+				if (const int64 Bytes = GetDiskSize(EditorModule, AssetRegistry, PackageName, DiskSizeCache); Bytes > 0)
 				{
 					Result.TotalBytes += Bytes;
 					++Result.PackageCount;
@@ -112,11 +122,15 @@ namespace
 				}
 			}
 
-			TArray<FName> Dependencies;
-			AssetRegistry.GetDependencies(PackageName, Dependencies,
-				UE::AssetRegistry::EDependencyCategory::Package, HardOnly);
+			TArray<FName>* Dependencies = DependencyCache.Find(PackageName);
+			if (!Dependencies)
+			{
+				TArray<FName> GatheredDependencies;
+				AssetRegistry.GetDependencies(PackageName, GatheredDependencies, UE::AssetRegistry::EDependencyCategory::Package, HardOnly);
+				Dependencies = &DependencyCache.Add(PackageName, MoveTemp(GatheredDependencies));
+			}
 
-			for (const FName Dependency : Dependencies)
+			for (const FName Dependency : *Dependencies)
 			{
 				if (Visited.Contains(Dependency))
 				{
@@ -126,7 +140,13 @@ namespace
 				// Mark rejected packages as visited too, so a level referenced through
 				// several branches is classified only once.
 				Visited.Add(Dependency);
-				if (IsWalkableDependency(AssetRegistry, Dependency))
+				const bool* bWalkable = WalkableCache.Find(Dependency);
+				
+				if (!bWalkable)
+				{
+					bWalkable = &WalkableCache.Add(Dependency, IsWalkableDependency(AssetRegistry, Dependency));
+				}
+				if (*bWalkable)
 				{
 					Pending.Add(Dependency);
 				}
@@ -137,6 +157,7 @@ namespace
 		{
 			return A.Bytes > B.Bytes;
 		});
+		
 		return Result;
 	}
 
@@ -167,11 +188,8 @@ namespace
 		const int32 Count = FMath::Min(3, Chain.Entries.Num());
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
-			const FChainEntry& Entry = Chain.Entries[Index];
-			Parts.Add(FText::Format(
-				LOCTEXT("HeaviestEntry", "{0} ({1})"),
-				FText::FromString(FPackageName::GetShortName(Entry.PackageName)),
-				FText::AsMemory(Entry.Bytes)));
+			const auto& [PackageName, Bytes] = Chain.Entries[Index];
+			Parts.Add(FText::Format(LOCTEXT("HeaviestEntry", "{0} ({1})"), FText::FromString(FPackageName::GetShortName(PackageName)), FText::AsMemory(Bytes)));
 		}
 		return FText::Join(LOCTEXT("HeaviestSeparator", ", "), Parts);
 	}
@@ -181,21 +199,18 @@ void FBlueprintDependencyPass::Run(const FLevelScanContext& Context, const FAnal
 {
 	if (!IAssetManagerEditorModule::IsAvailable())
 	{
-		Out.Findings.Add(MakeUnavailableFinding(
-			LOCTEXT("NoAssetManagerEditor", "the Asset Manager Editor plugin is not enabled")));
+		Out.Findings.Add(MakeUnavailableFinding(LOCTEXT("NoAssetManagerEditor", "the Asset Manager Editor plugin is not enabled")));
 		return;
 	}
 
-	FAssetRegistryModule& AssetRegistryModule =
-		FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
 	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
 
 	// Partial dependency data would under-report the chain, which reads as "this
 	// Blueprint is cheap" — the opposite of what the pass exists to say.
 	if (AssetRegistry.IsLoadingAssets())
 	{
-		Out.Findings.Add(MakeUnavailableFinding(
-			LOCTEXT("RegistryLoading", "the editor is still scanning the project's assets")));
+		Out.Findings.Add(MakeUnavailableFinding(LOCTEXT("RegistryLoading", "the editor is still scanning the project's assets")));
 		return;
 	}
 
@@ -211,15 +226,16 @@ void FBlueprintDependencyPass::Run(const FLevelScanContext& Context, const FAnal
 	// bytes, and the pass reported nothing at any threshold — until something else
 	// in the editor (opening a Size Map, say) happened to initialize it first, at
 	// which point the same scan suddenly worked. This one call is the whole fix.
-	const FAssetManagerEditorRegistrySource* RegistrySource = EditorModule.GetCurrentRegistrySource();
-	if (!RegistrySource || !RegistrySource->HasRegistry())
+	if (const FAssetManagerEditorRegistrySource* RegistrySource = EditorModule.GetCurrentRegistrySource(); !RegistrySource || !RegistrySource->HasRegistry())
 	{
-		Out.Findings.Add(MakeUnavailableFinding(
-			LOCTEXT("NoRegistrySource", "no asset registry source is available yet")));
+		Out.Findings.Add(MakeUnavailableFinding(LOCTEXT("NoRegistrySource", "no asset registry source is available yet")));
 		return;
 	}
 
 	const int64 ThresholdBytes = static_cast<int64>(T.DependencyChainSizeMB) * 1024 * 1024;
+	TMap<FName, int64> DiskSizeCache;
+	TMap<FName, TArray<FName>> DependencyCache;
+	TMap<FName, bool> WalkableCache;
 
 	// One entry per Blueprint class: the chain is a property of the asset, so a
 	// hundred placed copies are still one thing to fix.
@@ -246,14 +262,13 @@ void FBlueprintDependencyPass::Run(const FLevelScanContext& Context, const FAnal
 
 	for (const TPair<FName, TWeakObjectPtr<AActor>>& Pair : BlueprintPackages)
 	{
-		const FChainResult Chain = GatherChain(EditorModule, AssetRegistry, Pair.Key);
+		const FChainResult Chain = GatherChain(EditorModule, AssetRegistry, Pair.Key, DiskSizeCache, DependencyCache, WalkableCache);
 		if (Chain.TotalBytes < ThresholdBytes)
 		{
 			continue;
 		}
 
-		const ESeverity Severity = Chain.TotalBytes >= ThresholdBytes * 4
-			? ESeverity::Major : ESeverity::Minor;
+		const ESeverity Severity = Chain.TotalBytes >= ThresholdBytes * 4 ? ESeverity::Major : ESeverity::Minor;
 
 		FFinding F(TEXT("Blueprint.HeavyDependencyChain"), Severity, ECategory::Blueprints, EFindingScope::Asset,
 			LOCTEXT("Title", "Blueprint pulls in a large dependency chain"),
@@ -267,11 +282,14 @@ void FBlueprintDependencyPass::Run(const FLevelScanContext& Context, const FAnal
 		F.HowToFix = FText::Format(
 			LOCTEXT("Fix", "Heaviest: {0}. Make the ones that aren't needed immediately soft references (TSoftObjectPtr) and load them on demand."),
 			DescribeHeaviest(Chain));
+		
 		F.TargetActor = Pair.Value;
+		
 		if (const AActor* Owner = Pair.Value.Get())
 		{
 			F.TargetAsset = Owner->GetClass()->ClassGeneratedBy;
 		}
+		
 		Out.Findings.Add(MoveTemp(F));
 	}
 }

@@ -2,11 +2,11 @@
 
 #include "Toolset/Analyzer/Passes/LightingPass.h"
 
-#include "Engine/Light.h"
 #include "Engine/Level.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "Components/LightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Misc/PackageName.h"
@@ -35,10 +35,10 @@ void FLightingPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 	// hide it.
 	TSet<TPair<const UStaticMesh*, int32>> ReportedLightmaps;
 
-	for (AStaticMeshActor* Actor : Context.StaticMeshActors)
+	for (UStaticMeshComponent* Component : Context.StaticMeshComponents)
 	{
-		UStaticMeshComponent* Component = Actor->GetStaticMeshComponent();
 		UStaticMesh* Mesh = Component ? Component->GetStaticMesh() : nullptr;
+		AActor* Actor = Component ? Component->GetOwner() : nullptr;
 		if (!Mesh)
 		{
 			continue;
@@ -70,8 +70,7 @@ void FLightingPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 
 		// A lightmap is Resolution^2 texels of baked, streamed, memory-resident
 		// texture, so the cost is quadratic in this number.
-		const ESeverity Severity = Resolution > T.LightmapResolutionBudget * 2
-			? ESeverity::Major : ESeverity::Minor;
+		const ESeverity Severity = Resolution > T.LightmapResolutionBudget * 2 ? ESeverity::Major : ESeverity::Minor;
 
 		FFinding F(TEXT("Lighting.LightmapResolution"), Severity, ECategory::Lighting,
 			bComponentOverride ? EFindingScope::Actor : EFindingScope::Asset,
@@ -97,18 +96,18 @@ void FLightingPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 	struct FLevelLightGroup
 	{
 		const ULevel* Level = nullptr;
-		TArray<ALight*> Lights;
+		TArray<ULightComponent*> Lights;
 	};
 
 	TArray<FLevelLightGroup> LevelGroups;
 	TMap<const ULevel*, int32> GroupIndexByLevel;
 
-	for (ALight* Light : Context.Lights)
+	for (ULightComponent* LightComponent : Context.Lights)
 	{
-		ULightComponent* LC = Light->GetLightComponent();
-		if (LC && LC->Mobility == EComponentMobility::Movable)
+		if (LightComponent && LightComponent->Mobility == EComponentMobility::Movable)
 		{
-			const ULevel* Level = Light->GetLevel();
+			AActor* Owner = LightComponent->GetOwner();
+			const ULevel* Level = Owner ? Owner->GetLevel() : nullptr;
 			int32* ExistingIndex = GroupIndexByLevel.Find(Level);
 			if (!ExistingIndex)
 			{
@@ -117,7 +116,7 @@ void FLightingPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 				GroupIndexByLevel.Add(Level, NewIndex);
 				ExistingIndex = GroupIndexByLevel.Find(Level);
 			}
-			LevelGroups[*ExistingIndex].Lights.Add(Light);
+			LevelGroups[*ExistingIndex].Lights.Add(LightComponent);
 		}
 	}
 
@@ -128,26 +127,27 @@ void FLightingPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 			continue;
 		}
 
-		const FString LevelPackageName = Group.Level
-			? Group.Level->GetOutermost()->GetName()
-			: (Context.World ? Context.World->GetOutermost()->GetName() : FString());
+		const FString LevelPackageName = Group.Level ? Group.Level->GetOutermost()->GetName() : (Context.World ? Context.World->GetOutermost()->GetName() : FString());
 		const FText LevelLabel = FText::FromString(FPackageName::GetShortName(LevelPackageName));
-		const FText BudgetContext = FText::Format(
-			LOCTEXT("MovableLightBudgetContext", "Level {0} contains {1} movable lights; its configured budget is {2}."),
+		const FText BudgetContext = FText::Format(LOCTEXT("MovableLightBudgetContext", "Level {0} contains {1} movable lights; its configured budget is {2}."),
 			LevelLabel, FText::AsNumber(Group.Lights.Num()), FText::AsNumber(T.MovableLightBudget));
 
 		// Emit addressable findings so Focus and Apply operate on the light the user
 		// is reviewing instead of an arbitrary actor from an aggregate warning.
-		for (ALight* Light : Group.Lights)
+		for (ULightComponent* LightComponent : Group.Lights)
 		{
+			AActor* Owner = LightComponent ? LightComponent->GetOwner() : nullptr;
+			const FText Subject = Owner 
+				? FText::Format(LOCTEXT("MovableLightSubject", "{0} — {1}"), FText::FromString(Owner->GetActorNameOrLabel()), FText::FromString(LightComponent->GetName()))
+				: LOCTEXT("UnknownLightSubject", "Unknown light component");
+			
 			FFinding F(TEXT("Lighting.MovableLightOverBudget"), ESeverity::Major, ECategory::Lighting, EFindingScope::Level,
 				LOCTEXT("MovableLightTitle", "Movable light contributes to an exceeded budget"),
-				FText::FromString(Light->GetActorLabel()));
-			F.WhyItMatters = FText::Format(
-				LOCTEXT("MovableLightWhy", "{0} Every movable light adds dynamic shadow and lighting cost each frame."),
-				BudgetContext);
+				Subject);
+			F.WhyItMatters = FText::Format(LOCTEXT("MovableLightWhy", "{0} Every movable light adds dynamic shadow and lighting cost each frame."), BudgetContext);
 			F.HowToFix = LOCTEXT("MovableLightFix", "If this light does not move at runtime, change it to Stationary.");
-			F.TargetActor = Light;
+			F.TargetActor = Owner;
+			F.TargetComponent = LightComponent;
 			F.FixId = TEXT("Fix_ReviewLightMobility");
 			Out.Findings.Add(MoveTemp(F));
 		}

@@ -6,17 +6,25 @@
 #include "Toolset/ToolsetTypes.h"
 #include "GameFramework/Actor.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 
-class UStaticMesh;
-
-/** Resolves the static mesh asset behind a finding's target actor, or null. */
-inline UStaticMesh* MeshFromFinding(const FFinding& Finding)
+namespace OptimizationFixUtils
 {
-	AActor* Actor = Finding.TargetActor.Get();
-	if (!Actor)
+	/** Resolves the explicit mesh asset first, then falls back to its actor. */
+	inline UStaticMesh* ResolveStaticMesh(const FFinding& Finding)
 	{
-		return nullptr;
+		if (UStaticMesh* Mesh = Cast<UStaticMesh>(Finding.TargetAsset.Get()))
+		{
+			return Mesh;
+		}
+
+		const AActor* Actor = Finding.TargetActor.Get();
+		if (!Actor)
+		{
+			return nullptr;
+		}
+		
+		const UStaticMeshComponent* Comp = Actor->FindComponentByClass<UStaticMeshComponent>();
+		return Comp ? Comp->GetStaticMesh() : nullptr;
 	}
-	UStaticMeshComponent* Comp = Actor->FindComponentByClass<UStaticMeshComponent>();
-	return Comp ? Comp->GetStaticMesh() : nullptr;
 }

@@ -77,11 +77,11 @@ public:
 	// ---- Fixes --------------------------------------------------------------
 	static bool HasSupportedFix(const FFinding& Finding);
 
-	/** Applies one fix, then rescans so every view reflects the new truth. */
-	void ApplyFix(TSharedPtr<FFinding> Finding);
+	/** Applies one fix, rescans, and returns whether the fix changed anything. */
+	bool ApplyFix(TSharedPtr<FFinding> Finding);
 
-	/** Applies the fixes for a selection of findings, then rescans once. */
-	void ApplyFixes(const TArray<TSharedPtr<FFinding>>& Findings);
+	/** Applies a selection, rescans once, and returns the successful fix count. */
+	int32 ApplyFixes(const TArray<TSharedPtr<FFinding>>& Findings);
 
 private:
 	/** Rebuilds the shared findings from LastScan and broadcasts. */

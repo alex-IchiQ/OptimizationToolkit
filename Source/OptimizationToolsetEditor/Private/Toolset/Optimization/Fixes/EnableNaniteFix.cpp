@@ -26,7 +26,7 @@ bool FEnableNaniteFix::IsSupported() const
 bool FEnableNaniteFix::Apply(const FFinding& Finding) const
 {
 #if OPTIMIZATION_HAS_NANITE
-	UStaticMesh* Mesh = MeshFromFinding(Finding);
+	UStaticMesh* Mesh = OptimizationFixUtils::ResolveStaticMesh(Finding);
 	if (!Mesh || Mesh->IsNaniteEnabled())
 	{
 		return false;

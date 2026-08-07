@@ -7,7 +7,8 @@
 class UWorld;
 class AActor;
 class AStaticMeshActor;
-class ALight;
+class UStaticMeshComponent;
+class ULightComponent;
 
 /**
  * One shared walk of the level, handed to every pass.
@@ -27,5 +28,10 @@ struct FLevelScanContext
 
 	/** Pre-filtered subsets of Actors, for the types passes ask for most. */
 	TArray<AStaticMeshActor*> StaticMeshActors;
-	TArray<ALight*> Lights;
+
+	/** Includes components owned by Blueprint actors, not only AStaticMeshActor. */
+	TArray<UStaticMeshComponent*> StaticMeshComponents;
+
+	/** Includes light components owned by Blueprint actors, not only ALight. */
+	TArray<ULightComponent*> Lights;
 };

@@ -62,7 +62,7 @@ namespace
 	}
 
 	/** The static mesh a finding is about, whether it points at the asset or an actor. */
-	const UStaticMesh* MeshFromFinding(const FFinding& Finding)
+	const UStaticMesh* ResolveStaticMeshFromFinding(const FFinding& Finding)
 	{
 		if (const UStaticMesh* Mesh = Cast<UStaticMesh>(Finding.TargetAsset.Get()))
 		{
@@ -85,7 +85,7 @@ namespace
 		{
 			return MeshFromActor(Node.MemberActor.Get());
 		}
-		return Node.Finding.IsValid() ? MeshFromFinding(*Node.Finding) : nullptr;
+		return Node.Finding.IsValid() ? ResolveStaticMeshFromFinding(*Node.Finding) : nullptr;
 	}
 
 	const UTexture2D* TextureFromNode(const FAffectedNode& Node)
@@ -108,7 +108,7 @@ namespace
 		// A group parent stands for the shared mesh, not its representative actor.
 		if (NodeIsGroupParent(Node))
 		{
-			const UStaticMesh* Mesh = MeshFromFinding(*Node.Finding);
+			const UStaticMesh* Mesh = ResolveStaticMeshFromFinding(*Node.Finding);
 			return Mesh ? FText::FromString(Mesh->GetName()) : Node.Finding->Subject;
 		}
 		if (const UObject* Asset = Node.Finding->TargetAsset.Get())
@@ -755,7 +755,7 @@ void SOptimizeView::BuildColumns(const TSharedPtr<FOptimizeNode>& Problem)
 				bTexture = true;
 				break;
 			}
-			if (MeshFromFinding(*Finding))
+			if (ResolveStaticMeshFromFinding(*Finding))
 			{
 				bMesh = true;
 				break;
@@ -1069,8 +1069,7 @@ FReply SOptimizeView::OnApplyClicked()
 	}
 
 	// ApplyFixes rescans once at the end, which triggers Refresh() through OnChanged.
-	const int32 NumFixed = ToFix.Num();
-	Model->ApplyFixes(ToFix);
+	const int32 NumFixed = Model->ApplyFixes(ToFix);
 
 	if (NumFixed > 0)
 	{
@@ -1080,6 +1079,16 @@ FReply SOptimizeView::OnApplyClicked()
 		if (const TSharedPtr<SNotificationItem> Item = FSlateNotificationManager::Get().AddNotification(Info))
 		{
 			Item->SetCompletionState(SNotificationItem::CS_Success);
+		}
+	}
+	else if (!ToFix.IsEmpty())
+	{
+		FNotificationInfo Info(LOCTEXT("NoFixAppliedToast", "No selected fix could be applied; the level was rescanned."));
+		Info.ExpireDuration = 4.0f;
+		Info.bUseSuccessFailIcons = true;
+		if (const TSharedPtr<SNotificationItem> Item = FSlateNotificationManager::Get().AddNotification(Info))
+		{
+			Item->SetCompletionState(SNotificationItem::CS_Fail);
 		}
 	}
 	return FReply::Handled();

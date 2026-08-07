@@ -4,8 +4,38 @@
 #include "Toolset/ToolsetCompat.h"
 
 #include "Engine/RendererSettings.h"
+#include "Engine/Texture2D.h"
+#include "Components/PrimitiveComponent.h"
+#include "GameFramework/Actor.h"
+#include "SceneTypes.h"
 
 #define LOCTEXT_NAMESPACE "ProjectSettingsPass"
+
+namespace
+{
+	bool IsConventionalStreamableTexture(const UTexture2D& Texture)
+	{
+		if (Texture.NeverStream || Texture.VirtualTextureStreaming)
+		{
+			return false;
+		}
+
+		switch (Texture.LODGroup)
+		{
+		case TEXTUREGROUP_UI:
+		case TEXTUREGROUP_RenderTarget:
+		case TEXTUREGROUP_Lightmap:
+		case TEXTUREGROUP_Shadowmap:
+		case TEXTUREGROUP_ColorLookupTable:
+		case TEXTUREGROUP_Bokeh:
+		case TEXTUREGROUP_IESLightProfile:
+		case TEXTUREGROUP_Pixels2D:
+			return false;
+		default:
+			return true;
+		}
+	}
+}
 
 void FProjectSettingsPass::Run(const FLevelScanContext& Context, const FAnalyzeThresholds& T, FScanResult& Out) const
 {
@@ -16,6 +46,50 @@ void FProjectSettingsPass::Run(const FLevelScanContext& Context, const FAnalyzeT
 	}
 
 	const FText Subject = LOCTEXT("Subject", "Project Settings > Rendering");
+
+	// Disabling the global streamer is only actionable when the loaded level uses
+	// enough ordinary textures for residency to matter. Small tools and stylized
+	// projects can reasonably keep a handful resident, so require either a clear
+	// texture count or memory signal before raising this finding.
+	if (!Settings->bTextureStreaming)
+	{
+		constexpr int32 TextureCountThreshold = 20;
+		constexpr int64 TextureMemoryThreshold = 256ll * 1024ll * 1024ll;
+		TSet<UTexture2D*> StreamableTextures;
+		int64 FullTextureBytes = 0;
+
+		for (AActor* Actor : Context.Actors)
+		{
+			for (TInlineComponentArray<UPrimitiveComponent*> Components(Actor); UPrimitiveComponent* Component : Components)
+			{
+				TArray<UTexture*> UsedTextures;
+				Component->GetUsedTextures(UsedTextures, EMaterialQualityLevel::High);
+				for (UTexture* UsedTexture : UsedTextures)
+				{
+					UTexture2D* Texture = Cast<UTexture2D>(UsedTexture);
+					if (!Texture || !IsConventionalStreamableTexture(*Texture) || Texture->HasAnyFlags(RF_Transient)
+						|| Texture->GetPathName().StartsWith(TEXT("/Engine/"))
+						|| StreamableTextures.Contains(Texture))
+					{
+						continue;
+					}
+					StreamableTextures.Add(Texture);
+					FullTextureBytes += FMath::Max<int64>(Texture->CalcTextureMemorySizeEnum(TMC_AllMips), 0);
+				}
+			}
+		}
+
+		if (StreamableTextures.Num() >= TextureCountThreshold || FullTextureBytes >= TextureMemoryThreshold)
+		{
+			FFinding F(TEXT("Project.TextureStreamingDisabled"), ESeverity::Major, ECategory::Project, EFindingScope::Project,
+				LOCTEXT("TextureStreamingTitle", "Texture Streaming is disabled"),
+				FText::Format(LOCTEXT("TextureStreamingSubject", "{0} textures · {1} full mip memory"),
+					FText::AsNumber(StreamableTextures.Num()), FText::AsMemory(FullTextureBytes)));
+			F.WhyItMatters = LOCTEXT("TextureStreamingWhy", "The loaded levels use enough conventional textures that keeping every mip resident can create a large fixed memory cost and longer loads.");
+			F.HowToFix = LOCTEXT("TextureStreamingFix", "Enable Texture Streaming in Project Settings > Rendering, then rebuild texture streaming data for the affected levels.");
+			Out.Findings.Add(MoveTemp(F));
+		}
+	}
 
 	// --- Occlusion culling off means every mesh in the level is submitted, no
 	// matter what is actually visible. Nothing else in the plugin can win back
@@ -35,8 +109,7 @@ void FProjectSettingsPass::Run(const FLevelScanContext& Context, const FAnalyzeT
 	if (Overrides && Overrides->bSupportAllShaderPermutations)
 	{
 		FFinding F(TEXT("Project.AllShaderPermutations"), ESeverity::Major, ECategory::Project, EFindingScope::Project,
-			LOCTEXT("PermutationsTitle", "Support All Shader Permutations is enabled"),
-			LOCTEXT("OverridesSubject", "Project Settings > Rendering Overrides"));
+			LOCTEXT("PermutationsTitle", "Support All Shader Permutations is enabled"), LOCTEXT("OverridesSubject", "Project Settings > Rendering Overrides"));
 		F.WhyItMatters = LOCTEXT("PermutationsWhy", "Shaders are compiled for features the project never uses, inflating cook time, package size and the PSO count behind hitches.");
 		F.HowToFix = LOCTEXT("PermutationsFix", "Disable Support All Shader Permutations in Project Settings > Rendering > Optimizations; it exists for engine development, not shipping projects.");
 		Out.Findings.Add(MoveTemp(F));

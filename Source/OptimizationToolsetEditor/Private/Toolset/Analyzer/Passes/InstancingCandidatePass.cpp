@@ -17,23 +17,51 @@ namespace
 	{
 		const ULevel* Level = nullptr;
 		const UStaticMesh* Mesh = nullptr;
+		FName FolderPath;
 		TArray<const UMaterialInterface*> Materials;
 		FName CollisionProfile;
 		ECollisionEnabled::Type CollisionEnabled = ECollisionEnabled::NoCollision;
 		ECollisionChannel ObjectType = ECC_WorldStatic;
 		FCollisionResponseContainer CollisionResponses;
 		bool bCastShadow = true;
+		bool bActorHidden = false;
+		bool bActorHiddenEd = false;
+		bool bVisible = true;
+		bool bHiddenInGame = false;
+		bool bReceivesDecals = true;
+		bool bUseAsOccluder = true;
+		bool bRenderCustomDepth = false;
+		int32 CustomDepthStencilValue = 0;
+		float MinDrawDistance = 0.0f;
+		float MaxDrawDistance = 0.0f;
+		bool bLightingChannel0 = true;
+		bool bLightingChannel1 = false;
+		bool bLightingChannel2 = false;
 
 		bool operator==(const FInstancingKey& Other) const
 		{
 			return Level == Other.Level
 				&& Mesh == Other.Mesh
+				&& FolderPath == Other.FolderPath
 				&& Materials == Other.Materials
 				&& CollisionProfile == Other.CollisionProfile
 				&& CollisionEnabled == Other.CollisionEnabled
 				&& ObjectType == Other.ObjectType
 				&& CollisionResponses == Other.CollisionResponses
-				&& bCastShadow == Other.bCastShadow;
+				&& bCastShadow == Other.bCastShadow
+				&& bActorHidden == Other.bActorHidden
+				&& bActorHiddenEd == Other.bActorHiddenEd
+				&& bVisible == Other.bVisible
+				&& bHiddenInGame == Other.bHiddenInGame
+				&& bReceivesDecals == Other.bReceivesDecals
+				&& bUseAsOccluder == Other.bUseAsOccluder
+				&& bRenderCustomDepth == Other.bRenderCustomDepth
+				&& CustomDepthStencilValue == Other.CustomDepthStencilValue
+				&& MinDrawDistance == Other.MinDrawDistance
+				&& MaxDrawDistance == Other.MaxDrawDistance
+				&& bLightingChannel0 == Other.bLightingChannel0
+				&& bLightingChannel1 == Other.bLightingChannel1
+				&& bLightingChannel2 == Other.bLightingChannel2;
 		}
 
 		// CollisionResponses is deliberately left out of the hash: it is compared in
@@ -42,6 +70,7 @@ namespace
 		friend uint32 GetTypeHash(const FInstancingKey& Key)
 		{
 			uint32 Hash = HashCombine(GetTypeHash(Key.Level), GetTypeHash(Key.Mesh));
+			Hash = HashCombine(Hash, GetTypeHash(Key.FolderPath));
 			for (const UMaterialInterface* Material : Key.Materials)
 			{
 				Hash = HashCombine(Hash, GetTypeHash(Material));
@@ -50,6 +79,19 @@ namespace
 			Hash = HashCombine(Hash, GetTypeHash(static_cast<uint8>(Key.CollisionEnabled)));
 			Hash = HashCombine(Hash, GetTypeHash(static_cast<uint8>(Key.ObjectType)));
 			Hash = HashCombine(Hash, GetTypeHash(Key.bCastShadow));
+			Hash = HashCombine(Hash, GetTypeHash(Key.bActorHidden));
+			Hash = HashCombine(Hash, GetTypeHash(Key.bActorHiddenEd));
+			Hash = HashCombine(Hash, GetTypeHash(Key.bVisible));
+			Hash = HashCombine(Hash, GetTypeHash(Key.bHiddenInGame));
+			Hash = HashCombine(Hash, GetTypeHash(Key.bReceivesDecals));
+			Hash = HashCombine(Hash, GetTypeHash(Key.bUseAsOccluder));
+			Hash = HashCombine(Hash, GetTypeHash(Key.bRenderCustomDepth));
+			Hash = HashCombine(Hash, GetTypeHash(Key.CustomDepthStencilValue));
+			Hash = HashCombine(Hash, GetTypeHash(Key.MinDrawDistance));
+			Hash = HashCombine(Hash, GetTypeHash(Key.MaxDrawDistance));
+			Hash = HashCombine(Hash, GetTypeHash(Key.bLightingChannel0));
+			Hash = HashCombine(Hash, GetTypeHash(Key.bLightingChannel1));
+			Hash = HashCombine(Hash, GetTypeHash(Key.bLightingChannel2));
 			return Hash;
 		}
 	};
@@ -78,11 +120,25 @@ void FInstancingCandidatePass::Run(const FLevelScanContext& Context, const FAnal
 		FInstancingKey Key;
 		Key.Level = Actor->GetLevel();
 		Key.Mesh = Mesh;
+		Key.FolderPath = Actor->GetFolderPath();
 		Key.CollisionProfile = Component->GetCollisionProfileName();
 		Key.CollisionEnabled = Component->GetCollisionEnabled();
 		Key.ObjectType = Component->GetCollisionObjectType();
 		Key.CollisionResponses = Component->GetCollisionResponseToChannels();
 		Key.bCastShadow = Component->CastShadow;
+		Key.bActorHidden = Actor->IsHidden();
+		Key.bActorHiddenEd = Actor->IsHiddenEd();
+		Key.bVisible = Component->IsVisible();
+		Key.bHiddenInGame = Component->bHiddenInGame;
+		Key.bReceivesDecals = Component->bReceivesDecals;
+		Key.bUseAsOccluder = Component->bUseAsOccluder;
+		Key.bRenderCustomDepth = Component->bRenderCustomDepth;
+		Key.CustomDepthStencilValue = Component->CustomDepthStencilValue;
+		Key.MinDrawDistance = Component->MinDrawDistance;
+		Key.MaxDrawDistance = Component->LDMaxDrawDistance;
+		Key.bLightingChannel0 = Component->LightingChannels.bChannel0;
+		Key.bLightingChannel1 = Component->LightingChannels.bChannel1;
+		Key.bLightingChannel2 = Component->LightingChannels.bChannel2;
 
 		const int32 MaterialCount = Component->GetNumMaterials();
 		Key.Materials.Reserve(MaterialCount);
@@ -104,8 +160,7 @@ void FInstancingCandidatePass::Run(const FLevelScanContext& Context, const FAnal
 
 		const int32 MaterialPasses = FMath::Max(1, Pair.Key.Materials.Num());
 		const int32 EstimatedSavedDrawCalls = (Actors.Num() - 1) * MaterialPasses;
-		const ESeverity Severity = Actors.Num() >= T.InstancingCandidateCount * 3
-			? ESeverity::Major : ESeverity::Minor;
+		const ESeverity Severity = Actors.Num() >= T.InstancingCandidateCount * 3 ? ESeverity::Major : ESeverity::Minor;
 
 		FFinding F(TEXT("Mesh.InstancingCandidate"), Severity, ECategory::Meshes, EFindingScope::Level,
 			LOCTEXT("InstancingCandidateTitle", "Repeated static meshes could be instanced"),

@@ -410,9 +410,8 @@ void SAnalyzerView::RebuildBars()
 			GpuBarBox->AddSlot().AutoHeight()
 			[
 				SNew(STextBlock)
-				.Text(FText::Format(LOCTEXT("GpuMeter", "GPU memory — {0} tracked of {1} dedicated"),
-					FText::AsMemory(Report.GrandTotal), FText::AsMemory(Report.DedicatedVideoMemory)))
-				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+					.Text(FText::Format(LOCTEXT("GpuMeter", "GPU memory — {0} tracked of {1} dedicated"), FText::AsMemory(Report.GrandTotal), FText::AsMemory(Report.DedicatedVideoMemory)))
+					.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 			];
 			GpuBarBox->AddSlot().AutoHeight().Padding(FMargin(0, 6, 0, 0))
 			[

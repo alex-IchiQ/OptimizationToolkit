@@ -30,9 +30,8 @@ FText FFixUpRedirectorsAction::GetButtonLabel() const
 
 FText FFixUpRedirectorsAction::Execute() const
 {
-	FAssetRegistryModule& AssetRegistryModule =
-		FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
-	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
+	const FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+	const IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
 
 	// A partial registry would silently miss redirectors, which looks like the
 	// action "worked" while leaving the project half-fixed.
@@ -69,8 +68,7 @@ FText FFixUpRedirectorsAction::Execute() const
 	}
 
 	const int32 Count = Redirectors.Num();
-	FAssetToolsModule& AssetToolsModule =
-		FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools"));
+	const FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools"));
 	AssetToolsModule.Get().FixupReferencers(Redirectors);
 
 	return FText::Format(

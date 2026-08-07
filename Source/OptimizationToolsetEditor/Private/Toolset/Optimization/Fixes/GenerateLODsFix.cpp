@@ -23,7 +23,7 @@ bool FGenerateLODsFix::IsSupported() const
 
 bool FGenerateLODsFix::Apply(const FFinding& Finding) const
 {
-	UStaticMesh* Mesh = MeshFromFinding(Finding);
+	UStaticMesh* Mesh = OptimizationFixUtils::ResolveStaticMesh(Finding);
 	if (!Mesh)
 	{
 		return false;
@@ -36,7 +36,7 @@ bool FGenerateLODsFix::Apply(const FFinding& Finding) const
 		return false;
 	}
 
-	const FScopedTransaction Transaction(LOCTEXT("GenLODsTx", "Generate LODs"));
+	FScopedTransaction Transaction(LOCTEXT("GenLODsTx", "Generate LODs"));
 	Mesh->Modify();
 
 	// A sensible default chain: LOD0 full, then aggressive auto-reduction.
@@ -54,7 +54,12 @@ bool FGenerateLODsFix::Apply(const FFinding& Finding) const
 	AddLod(0.25f);	// LOD2
 	AddLod(0.10f);	// LOD3
 
-	Subsystem->SetLodsWithNotification(Mesh, Options, /*bApplyChanges*/ true);
+	if (const int32 Result = Subsystem->SetLodsWithNotification(Mesh, Options, /*bApplyChanges*/ true); Result < 0)
+	{
+		Transaction.Cancel();
+		return false;
+	}
+	
 	Mesh->MarkPackageDirty();
 	return true;
 }

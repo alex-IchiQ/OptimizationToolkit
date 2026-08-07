@@ -141,8 +141,11 @@ void SProfileView::RunAction(const FProfileAction& Action)
 		// Nanite's visualization cvar force-enables its show flag independent of the
 		// view mode (its Update() sets bForceShowFlag when the cvar is set), so it
 		// keeps drawing after you switch away — even to Lit — until it is explicitly
-		// turned off. Clear it before every action; a Nanite action re-sets it next.
-		GEditor->Exec(World, TEXT("r.Nanite.Visualize off"));
+		// turned off. Clear it when switching view modes; a Nanite action re-sets it next.
+		if (Action.ViewMode != VMI_Unknown)
+		{
+			GEditor->Exec(World, TEXT("r.Nanite.Visualize off"));
+		}
 
 		// Then the action's own command picks the channel the view mode will display.
 		if (!Action.Command.IsEmpty())

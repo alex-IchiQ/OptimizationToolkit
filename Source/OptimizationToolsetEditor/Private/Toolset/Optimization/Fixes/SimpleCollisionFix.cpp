@@ -23,12 +23,10 @@ bool FSimpleCollisionFix::IsSupported() const
 
 bool FSimpleCollisionFix::Apply(const FFinding& Finding) const
 {
-	UStaticMesh* Mesh = MeshFromFinding(Finding);
+	UStaticMesh* Mesh = OptimizationFixUtils::ResolveStaticMesh(Finding);
 	UBodySetup* BodySetup = Mesh ? Mesh->GetBodySetup() : nullptr;
-	UStaticMeshEditorSubsystem* Subsystem =
-		GEditor ? GEditor->GetEditorSubsystem<UStaticMeshEditorSubsystem>() : nullptr;
-	if (!Mesh || !BodySetup || !Subsystem ||
-		BodySetup->CollisionTraceFlag != ECollisionTraceFlag::CTF_UseComplexAsSimple)
+	UStaticMeshEditorSubsystem* Subsystem = GEditor ? GEditor->GetEditorSubsystem<UStaticMeshEditorSubsystem>() : nullptr;
+	if (!Mesh || !BodySetup || !Subsystem || BodySetup->CollisionTraceFlag != ECollisionTraceFlag::CTF_UseComplexAsSimple)
 	{
 		return false;
 	}
@@ -41,8 +39,7 @@ bool FSimpleCollisionFix::Apply(const FFinding& Finding) const
 	// so switching away from per-poly collision cannot leave the mesh non-colliding.
 	if (Subsystem->GetSimpleCollisionCount(Mesh) == 0)
 	{
-		const int32 PrimitiveIndex = Subsystem->AddSimpleCollisionsWithNotification(
-			Mesh, EScriptCollisionShapeType::Box, /*bApplyChanges*/ false);
+		const int32 PrimitiveIndex = Subsystem->AddSimpleCollisionsWithNotification(Mesh, EScriptCollisionShapeType::Box, /*bApplyChanges*/ false);
 		if (PrimitiveIndex == INDEX_NONE)
 		{
 			Transaction.Cancel();

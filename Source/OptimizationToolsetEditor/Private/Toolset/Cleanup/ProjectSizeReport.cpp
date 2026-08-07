@@ -110,9 +110,8 @@ FProjectSizeReport FProjectSizeReport::Compute()
 {
 	FProjectSizeReport Report;
 
-	FAssetRegistryModule& AssetRegistryModule =
-		FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
-	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
+	const FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+	const IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
 
 	// Half a registry means half a project measured, which reads as "the project
 	// shrank" rather than "we looked too early". Say so instead of guessing.
@@ -138,8 +137,7 @@ FProjectSizeReport FProjectSizeReport::Compute()
 	PackageToClass.Reserve(Assets.Num());
 	for (const FAssetData& Asset : Assets)
 	{
-		FName& ClassName = PackageToClass.FindOrAdd(Asset.PackageName);
-		if (ClassName.IsNone())
+		if (FName& ClassName = PackageToClass.FindOrAdd(Asset.PackageName); ClassName.IsNone())
 		{
 			ClassName = Asset.AssetClassPath.GetAssetName();
 		}

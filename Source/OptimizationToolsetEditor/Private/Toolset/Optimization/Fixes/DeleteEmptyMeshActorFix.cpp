@@ -23,7 +23,7 @@ bool FDeleteEmptyMeshActorFix::IsSupported() const
 bool FDeleteEmptyMeshActorFix::Apply(const FFinding& Finding) const
 {
 	AStaticMeshActor* Actor = Cast<AStaticMeshActor>(Finding.TargetActor.Get());
-	UStaticMeshComponent* Component = Actor ? Actor->GetStaticMeshComponent() : nullptr;
+	const UStaticMeshComponent* Component = Actor ? Actor->GetStaticMeshComponent() : nullptr;
 	UWorld* World = Actor ? Actor->GetWorld() : nullptr;
 
 	// The level may have changed since the scan. Never delete an actor that has

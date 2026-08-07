@@ -65,8 +65,7 @@ namespace
 					continue;
 				}
 
-				const int32 Count = static_cast<int32>(ShaderMap->GetMaxNumInstructionsForShader(ShaderType));
-				if (Count > Worst)
+				if (const int32 Count = static_cast<int32>(ShaderMap->GetMaxNumInstructionsForShader(ShaderType)); Count > Worst)
 				{
 					Worst = Count;
 					OutShaderDescription = Info.ShaderDescription;
@@ -120,9 +119,7 @@ void FMaterialPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 			for (int32 MaterialIndex = 0; MaterialIndex < MaterialCount; ++MaterialIndex)
 			{
 				UMaterialInterface* Material = Component->GetMaterial(MaterialIndex);
-				if (Material && !Material->HasAnyFlags(RF_Transient)
-					&& !Material->GetPathName().StartsWith(TEXT("/Engine/"))
-					&& !MaterialOwners.Contains(Material))
+				if (Material && !Material->HasAnyFlags(RF_Transient) && !Material->GetPathName().StartsWith(TEXT("/Engine/")) && !MaterialOwners.Contains(Material))
 				{
 					MaterialOwners.Add(Material, Actor);
 				}
@@ -152,17 +149,14 @@ void FMaterialPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 	for (const TPair<FMaterialSlotKey, TWeakObjectPtr<AActor>>& Pair : SlotLayouts)
 	{
 		const int32 SlotCount = Pair.Key.Materials.Num();
-		const FText Subject = FText::Format(
-			LOCTEXT("MaterialSlotsSubject", "{0} ({1} slots)"),
-			FText::FromString(Pair.Key.Mesh->GetName()), FText::AsNumber(SlotCount));
+		const FText Subject = FText::Format(LOCTEXT("MaterialSlotsSubject", "{0} ({1} slots)"), FText::FromString(Pair.Key.Mesh->GetName()), FText::AsNumber(SlotCount));
 
 		if (SlotCount > T.MaterialSlotBudget && !ReportedSlotBudgets.Contains(Pair.Key.Mesh))
 		{
 			ReportedSlotBudgets.Add(Pair.Key.Mesh);
-			const ESeverity Severity = SlotCount > T.MaterialSlotBudget * 2
-				? ESeverity::Major : ESeverity::Minor;
-			FFinding F(TEXT("Material.SlotBudget"), Severity, ECategory::Materials, EFindingScope::Asset,
-				LOCTEXT("MaterialSlotBudgetTitle", "Mesh has many material slots"), Subject);
+			const ESeverity Severity = SlotCount > T.MaterialSlotBudget * 2 ? ESeverity::Major : ESeverity::Minor;
+			
+			FFinding F(TEXT("Material.SlotBudget"), Severity, ECategory::Materials, EFindingScope::Asset,LOCTEXT("MaterialSlotBudgetTitle", "Mesh has many material slots"), Subject);
 			F.WhyItMatters = LOCTEXT("MaterialSlotBudgetWhy", "Each visible mesh section typically requires another draw submission and material state change.");
 			F.HowToFix = LOCTEXT("MaterialSlotBudgetFix", "Merge compatible materials or consolidate sections in the source mesh where visual requirements allow.");
 			F.TargetActor = Pair.Value;
@@ -191,14 +185,13 @@ void FMaterialPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 
 		if (EmptySlots > 0)
 		{
-			FFinding F(TEXT("Material.EmptySlots"), ESeverity::Minor, ECategory::Materials,
-				Pair.Key.bUsesComponentOverrides ? EFindingScope::Actor : EFindingScope::Asset,
+			FFinding F(TEXT("Material.EmptySlots"), ESeverity::Minor, ECategory::Materials, Pair.Key.bUsesComponentOverrides ? EFindingScope::Actor : EFindingScope::Asset,
 				LOCTEXT("EmptyMaterialSlotsTitle", "Mesh contains empty material slots"), Subject);
-			F.WhyItMatters = FText::Format(
-				LOCTEXT("EmptyMaterialSlotsWhy", "{0} slots have no material assigned, which often indicates obsolete or broken section setup."),
+			F.WhyItMatters = FText::Format(LOCTEXT("EmptyMaterialSlotsWhy", "{0} slots have no material assigned, which often indicates obsolete or broken section setup."),
 				FText::AsNumber(EmptySlots));
 			F.HowToFix = LOCTEXT("EmptyMaterialSlotsFix", "Inspect the affected sections and remove unused slots in the source mesh or assign the intended material.");
 			F.TargetActor = Pair.Value;
+			
 			if (!Pair.Key.bUsesComponentOverrides)
 			{
 				F.TargetAsset = Pair.Key.Mesh;
@@ -208,7 +201,7 @@ void FMaterialPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 
 		if (DuplicateSlots > 0)
 		{
-			FFinding F(TEXT("Material.DuplicateSlots"), ESeverity::Minor, ECategory::Materials,
+			FFinding F(TEXT("Material.DuplicateSlots"), ESeverity::Minor, ECategory::Materials, 
 				Pair.Key.bUsesComponentOverrides ? EFindingScope::Actor : EFindingScope::Asset,
 				LOCTEXT("DuplicateMaterialSlotsTitle", "Multiple mesh slots use the same material"), Subject);
 			F.WhyItMatters = FText::Format(
@@ -216,6 +209,7 @@ void FMaterialPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 				FText::AsNumber(DuplicateSlots));
 			F.HowToFix = LOCTEXT("DuplicateMaterialSlotsFix", "Review section boundaries and merge slots in the source mesh when they do not need separate IDs.");
 			F.TargetActor = Pair.Value;
+			
 			if (!Pair.Key.bUsesComponentOverrides)
 			{
 				F.TargetAsset = Pair.Key.Mesh;
@@ -277,8 +271,7 @@ void FMaterialPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 
 		if (IsTranslucentBlendMode(*Material))
 		{
-			FFinding F(TEXT("Material.Translucent"), ESeverity::Minor, ECategory::Materials, EFindingScope::Asset,
-				LOCTEXT("TranslucentMaterialTitle", "Translucent material requires review"), Subject);
+			FFinding F(TEXT("Material.Translucent"), ESeverity::Minor, ECategory::Materials, EFindingScope::Asset, LOCTEXT("TranslucentMaterialTitle", "Translucent material requires review"), Subject);
 			F.WhyItMatters = LOCTEXT("TranslucentMaterialWhy", "Translucency can create heavy overdraw and sorting cost, especially on large screen-space surfaces.");
 			F.HowToFix = LOCTEXT("TranslucentMaterialFix", "Keep translucency only where required; prefer Masked or Opaque when the visual result permits.");
 			F.TargetActor = Pair.Value;
@@ -288,8 +281,7 @@ void FMaterialPass::Run(const FLevelScanContext& Context, const FAnalyzeThreshol
 
 		if (Material->IsTwoSided())
 		{
-			FFinding F(TEXT("Material.TwoSided"), ESeverity::Minor, ECategory::Materials, EFindingScope::Asset,
-				LOCTEXT("TwoSidedMaterialTitle", "Two-sided material requires review"), Subject);
+			FFinding F(TEXT("Material.TwoSided"), ESeverity::Minor, ECategory::Materials, EFindingScope::Asset, LOCTEXT("TwoSidedMaterialTitle", "Two-sided material requires review"), Subject);
 			F.WhyItMatters = LOCTEXT("TwoSidedMaterialWhy", "Rendering both face orientations increases rasterized geometry and can amplify overdraw.");
 			F.HowToFix = LOCTEXT("TwoSidedMaterialFix", "Disable Two Sided unless the asset genuinely needs visible backfaces, such as foliage or thin cloth.");
 			F.TargetActor = Pair.Value;

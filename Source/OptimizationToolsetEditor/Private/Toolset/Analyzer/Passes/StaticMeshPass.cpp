@@ -20,46 +20,43 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 	// only the mesh defaults: a placed actor can introduce an incompatible
 	// translucent override. One finding per mesh is enough because the requested
 	// fix disables Nanite on that asset for every use.
-	for (AActor* Actor : Context.Actors)
+	for (UStaticMeshComponent* Component : Context.StaticMeshComponents)
 	{
-		TInlineComponentArray<UStaticMeshComponent*> Components(Actor);
-		for (UStaticMeshComponent* Component : Components)
+		UStaticMesh* Mesh = Component ? Component->GetStaticMesh() : nullptr;
+		if (!Mesh || !Mesh->IsNaniteEnabled() || Component->IsDisallowNanite()
+			|| NaniteMaterialIncompatibilities.Contains(Mesh))
 		{
-			UStaticMesh* Mesh = Component ? Component->GetStaticMesh() : nullptr;
-			if (!Mesh || !Mesh->IsNaniteEnabled() || Component->IsDisallowNanite()
-				|| NaniteMaterialIncompatibilities.Contains(Mesh))
+			continue;
+		}
+
+		const int32 MaterialCount = Component->GetNumMaterials();
+		for (int32 MaterialIndex = 0; MaterialIndex < MaterialCount; ++MaterialIndex)
+		{
+			UMaterialInterface* Material = Component->GetMaterial(MaterialIndex);
+			if (!Material)
 			{
 				continue;
 			}
 
-			const int32 MaterialCount = Component->GetNumMaterials();
-			for (int32 MaterialIndex = 0; MaterialIndex < MaterialCount; ++MaterialIndex)
+			const EBlendMode BlendMode = Material->GetBlendMode();
+			if (BlendMode == BLEND_Opaque || BlendMode == BLEND_Masked)
 			{
-				UMaterialInterface* Material = Component->GetMaterial(MaterialIndex);
-				if (!Material)
-				{
-					continue;
-				}
-
-				const EBlendMode BlendMode = Material->GetBlendMode();
-				if (BlendMode == BLEND_Opaque || BlendMode == BLEND_Masked)
-				{
-					continue;
-				}
-
-				NaniteMaterialIncompatibilities.Add(Mesh);
-				FFinding F(TEXT("Mesh.NaniteUnsupportedMaterial"), ESeverity::Major, ECategory::Meshes, EFindingScope::Asset,
-					LOCTEXT("NaniteUnsupportedMaterialTitle", "Nanite mesh uses an unsupported material"),
-					FText::Format(LOCTEXT("NaniteUnsupportedMaterialSubject", "{0} — {1}"),
-						FText::FromString(Mesh->GetName()), FText::FromString(Material->GetName())));
-				F.WhyItMatters = LOCTEXT("NaniteUnsupportedMaterialWhy", "Nanite currently accepts only Opaque or Masked materials. Other blend modes force fallback rendering and repeatedly emit LogStaticMesh warnings.");
-				F.HowToFix = LOCTEXT("NaniteUnsupportedMaterialFix", "Disable Nanite on the mesh asset, or replace the material with an Opaque or Masked alternative.");
-				F.TargetActor = Actor;
-				F.TargetAsset = Mesh;
-				F.FixId = TEXT("Fix_DisableNanite");
-				Out.Findings.Add(MoveTemp(F));
-				break;
+				continue;
 			}
+
+			NaniteMaterialIncompatibilities.Add(Mesh);
+			FFinding F(TEXT("Mesh.NaniteUnsupportedMaterial"), ESeverity::Major, ECategory::Meshes, EFindingScope::Asset,
+				LOCTEXT("NaniteUnsupportedMaterialTitle", "Nanite mesh uses an unsupported material"),
+				FText::Format(LOCTEXT("NaniteUnsupportedMaterialSubject", "{0} — {1}"),
+					FText::FromString(Mesh->GetName()), FText::FromString(Material->GetName())));
+			F.WhyItMatters = LOCTEXT("NaniteUnsupportedMaterialWhy", "Nanite currently accepts only Opaque or Masked materials. Other blend modes force fallback rendering and repeatedly emit LogStaticMesh warnings.");
+			F.HowToFix = LOCTEXT("NaniteUnsupportedMaterialFix", "Disable Nanite on the mesh asset, or replace the material with an Opaque or Masked alternative.");
+			F.TargetActor = Component->GetOwner();
+			F.TargetComponent = Component;
+			F.TargetAsset = Mesh;
+			F.FixId = TEXT("Fix_DisableNanite");
+			Out.Findings.Add(MoveTemp(F));
+			break;
 		}
 	}
 #endif
@@ -72,7 +69,6 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 	for (AStaticMeshActor* Actor : Context.StaticMeshActors)
 	{
 		UStaticMeshComponent* Comp = Actor->GetStaticMeshComponent();
-		UStaticMesh* Mesh = Comp ? Comp->GetStaticMesh() : nullptr;
 
 		// --- No mesh at all: the actor costs a transform and renders nothing.
 		//
@@ -81,7 +77,7 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 		// any component with a null mesh — a Blueprint's StaticMeshComponent is
 		// routinely left empty and filled in at runtime, so flagging those would
 		// report working code as broken.
-		if (!Mesh)
+		if (UStaticMesh* Mesh = Comp ? Comp->GetStaticMesh() : nullptr; !Mesh)
 		{
 			FFinding F(TEXT("Mesh.EmptyMesh"), ESeverity::Minor, ECategory::Meshes, EFindingScope::Actor,
 				LOCTEXT("EmptyMeshTitle", "Static mesh actor has no mesh assigned"), FText::FromString(Actor->GetActorNameOrLabel()));
@@ -90,10 +86,16 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 			F.TargetActor = Actor;
 			F.FixId = TEXT("Fix_DeleteEmptyMeshActor");
 			Out.Findings.Add(MoveTemp(F));
-			continue;
 		}
+	}
 
-		if (Reported.Contains(Mesh))
+	// Asset-level checks include meshes owned by Blueprint actors. De-duplicate
+	// by asset so a shared mesh still produces only one actionable finding.
+	for (UStaticMeshComponent* Comp : Context.StaticMeshComponents)
+	{
+		UStaticMesh* Mesh = Comp ? Comp->GetStaticMesh() : nullptr;
+		AActor* Actor = Comp ? Comp->GetOwner() : nullptr;
+		if (!Mesh || Reported.Contains(Mesh))
 		{
 			continue;
 		}
@@ -176,8 +178,7 @@ void FStaticMeshPass::Run(const FLevelScanContext& Context, const FAnalyzeThresh
 		// --- Missing LODs on a non-Nanite mesh: no distance falloff at all.
 		if (!bNanite && Mesh->GetNumLODs() <= 1 && NumTris >= T.NaniteCandidateTriangles)
 		{
-			FFinding F(TEXT("Mesh.MissingLODs"), ESeverity::Major, ECategory::Meshes, EFindingScope::Asset,
-				LOCTEXT("MissingLODTitle", "No LODs on a heavy non-Nanite mesh"), Subject);
+			FFinding F(TEXT("Mesh.MissingLODs"), ESeverity::Major, ECategory::Meshes, EFindingScope::Asset, LOCTEXT("MissingLODTitle", "No LODs on a heavy non-Nanite mesh"), Subject);
 			F.WhyItMatters = LOCTEXT("MissingLODWhy", "Without LODs the full triangle count is drawn at every distance.");
 			F.HowToFix = LOCTEXT("MissingLODFix", "Enable Nanite, or generate an LOD chain (auto-LOD fix available).");
 			F.TargetActor = Actor;

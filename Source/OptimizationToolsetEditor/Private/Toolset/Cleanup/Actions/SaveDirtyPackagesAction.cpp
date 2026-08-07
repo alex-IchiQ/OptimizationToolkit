@@ -35,10 +35,7 @@ FText FSaveDirtyPackagesAction::Execute() const
 		return LOCTEXT("NothingToSave", "Nothing to save — no modified packages.");
 	}
 
-	FEditorFileUtils::SaveDirtyPackages(
-		/*bPromptUserToSave*/ false,
-		/*bSaveMapPackages*/ true,
-		/*bSaveContentPackages*/ true);
+	FEditorFileUtils::SaveDirtyPackages(false, true, true);
 
 	// Re-query rather than trusting the return value: anything still dirty was
 	// skipped (read-only on disk, checked out by someone else, and so on).
@@ -46,12 +43,10 @@ FText FSaveDirtyPackagesAction::Execute() const
 	DirtyContentPackages.Reset();
 	FEditorFileUtils::GetDirtyWorldPackages(DirtyMapPackages);
 	FEditorFileUtils::GetDirtyContentPackages(DirtyContentPackages);
-	const int32 RemainingCount = DirtyMapPackages.Num() + DirtyContentPackages.Num();
 
-	if (RemainingCount > 0)
+	if (const int32 RemainingCount = DirtyMapPackages.Num() + DirtyContentPackages.Num(); RemainingCount > 0)
 	{
-		return FText::Format(
-			LOCTEXT("SavedWithRemainder", "Saved {0} of {1} packages; {2} could not be written (read-only or not checked out)."),
+		return FText::Format(LOCTEXT("SavedWithRemainder", "Saved {0} of {1} packages; {2} could not be written (read-only or not checked out)."),
 			FText::AsNumber(DirtyCount - RemainingCount), FText::AsNumber(DirtyCount), FText::AsNumber(RemainingCount));
 	}
 

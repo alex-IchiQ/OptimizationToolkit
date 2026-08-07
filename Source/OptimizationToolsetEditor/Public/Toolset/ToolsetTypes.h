@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
 #include "UObject/WeakObjectPtr.h"
 
 class AActor;
@@ -80,6 +81,9 @@ struct FFinding
 
 	/** Actor to focus in the viewport when the user clicks the row (optional). */
 	TWeakObjectPtr<AActor> TargetActor;
+
+	/** Specific component involved when an actor can own several candidates. */
+	TWeakObjectPtr<UActorComponent> TargetComponent;
 
 	/**
 	 * The asset this finding is really about, when it is an asset rather than a

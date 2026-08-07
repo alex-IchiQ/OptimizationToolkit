@@ -20,7 +20,6 @@ public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 
-	/** Focuses (or spawns) the toolset tab. */
 	void OpenToolsetTab();
 
 private:

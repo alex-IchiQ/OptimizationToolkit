@@ -53,32 +53,32 @@ void FBlueprintTickPass::Run(const FLevelScanContext& Context, const FAnalyzeThr
 			continue;
 		}
 
-		FTickingClass& Entry = ByClass.FindOrAdd(Class);
-		if (Entry.InstanceCount == 0)
+		auto& [BlueprintName, FirstInstance, InstanceCount] = ByClass.FindOrAdd(Class);
+		if (InstanceCount == 0)
 		{
-			Entry.BlueprintName = Class->ClassGeneratedBy->GetName();
-			Entry.FirstInstance = Actor;
+			BlueprintName = Class->ClassGeneratedBy->GetName();
+			FirstInstance = Actor;
 		}
-		++Entry.InstanceCount;
+		++InstanceCount;
 	}
 
 	for (const TPair<const UClass*, FTickingClass>& Pair : ByClass)
 	{
-		const FTickingClass& Entry = Pair.Value;
+		const auto& [BlueprintName, FirstInstance, InstanceCount] = Pair.Value;
 
 		// One stray ticking prop is a rounding error; a hundred of them is a
 		// frame budget.
-		const ESeverity Severity = Entry.InstanceCount >= 10 ? ESeverity::Major : ESeverity::Minor;
+		const ESeverity Severity = InstanceCount >= 10 ? ESeverity::Major : ESeverity::Minor;
 
 		FFinding F(TEXT("Blueprint.StaticActorTicksEveryFrame"), Severity, ECategory::Blueprints, EFindingScope::Asset,
 			LOCTEXT("Title", "Static Blueprint actor ticks every frame"),
 			FText::Format(LOCTEXT("Subject", "{0} ({1} placed)"),
-				FText::FromString(Entry.BlueprintName), FText::AsNumber(Entry.InstanceCount)));
+				FText::FromString(BlueprintName), FText::AsNumber(InstanceCount)));
 		F.WhyItMatters = FText::Format(
 			LOCTEXT("Why", "{0} static instances run their tick every frame, paying CPU for something that cannot move."),
-			FText::AsNumber(Entry.InstanceCount));
+			FText::AsNumber(InstanceCount));
 		F.HowToFix = LOCTEXT("Fix", "Open the Blueprint, and in Class Defaults turn off Start with Tick Enabled or set a Tick Interval. This is a class setting: it affects every instance in every level.");
-		F.TargetActor = Entry.FirstInstance;
+		F.TargetActor = FirstInstance;
 		F.TargetAsset = Pair.Key->ClassGeneratedBy;
 		Out.Findings.Add(MoveTemp(F));
 	}

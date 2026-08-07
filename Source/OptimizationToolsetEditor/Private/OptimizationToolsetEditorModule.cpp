@@ -15,7 +15,7 @@
 
 #define LOCTEXT_NAMESPACE "OptimizationToolset"
 
-static const FName ToolsetTabName("OptimizationToolset");
+static const FName ToolsetTabName("OptimizationToolkit");
 
 void FOptimizationToolsetEditorModule::StartupModule()
 {
@@ -24,7 +24,7 @@ void FOptimizationToolsetEditorModule::StartupModule()
 
 	// Register the dockable tab.
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(ToolsetTabName, FOnSpawnTab::CreateRaw(this, &FOptimizationToolsetEditorModule::SpawnToolsetTab))
-		.SetDisplayName(LOCTEXT("TabTitle", "Optimization Toolset"))
+		.SetDisplayName(LOCTEXT("TabTitle", "Optimization Toolkit"))
 		.SetTooltipText(LOCTEXT("TabTooltip", "Analyze, optimize and profile the current level."))
 		.SetGroup(WorkspaceMenu::GetMenuStructure().GetToolsCategory())
 		.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.StatsViewer"));
@@ -69,9 +69,9 @@ void FOptimizationToolsetEditorModule::RegisterMenus()
 	{
 		FToolMenuSection& Section = Menu->FindOrAddSection("WindowLayout");
 		Section.AddMenuEntry(
-			"OpenOptimizationToolset",
-			LOCTEXT("MenuEntry", "Optimization Toolset"),
-			LOCTEXT("MenuEntryTip", "Open the Optimization / Profiling Toolset."),
+			"OpenOptimizationToolkit",
+			LOCTEXT("MenuEntry", "Optimization Toolkit"),
+			LOCTEXT("MenuEntryTip", "Open the Optimization / Profiling Toolkit."),
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.StatsViewer"),
 			FUIAction(FExecuteAction::CreateRaw(this, &FOptimizationToolsetEditorModule::OpenToolsetTab)));
 	}
@@ -79,12 +79,12 @@ void FOptimizationToolsetEditorModule::RegisterMenus()
 	// Level Editor toolbar button.
 	if (UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar.User"))
 	{
-		FToolMenuSection& Section = Toolbar->FindOrAddSection("OptimizationToolset");
+		FToolMenuSection& Section = Toolbar->FindOrAddSection("OptimizationToolkit");
 		FToolMenuEntry Entry = FToolMenuEntry::InitToolBarButton(
 			"OpenOptimizationToolset",
 			FUIAction(FExecuteAction::CreateRaw(this, &FOptimizationToolsetEditorModule::OpenToolsetTab)),
 			LOCTEXT("ToolbarLabel", "Optimize"),
-			LOCTEXT("ToolbarTip", "Open the Optimization / Profiling Toolset."),
+			LOCTEXT("ToolbarTip", "Open the Optimization / Profiling Toolkit."),
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.StatsViewer"));
 		Section.AddEntry(Entry);
 	}

@@ -70,11 +70,11 @@ TSharedRef<FSlateStyleSet> FOptimizeStyle::Create()
 {
 	TSharedRef<FSlateStyleSet> Style = MakeShareable(new FSlateStyleSet(GetStyleSetName()));
 
-	const float Radius = 4.0f;	// Palatial's corner radius, everywhere.
+	constexpr float Radius = 4.0f;	// Palatial's corner radius, everywhere.
 
 	// --- Surfaces ------------------------------------------------------------
-	Style->Set("Opt.Window", new FSlateColorBrush(Window));
-	Style->Set("Opt.Panel",  new FSlateColorBrush(Panel));
+	Style->Set("Opt.Window",	 new FSlateColorBrush(Window));
+	Style->Set("Opt.Panel",		 new FSlateColorBrush(Panel));
 	Style->Set("Opt.Card",       new FSlateRoundedBoxBrush(Card, Radius));
 	Style->Set("Opt.Card.Hover", new FSlateRoundedBoxBrush(CardHover, Radius));
 	// A tile nested inside a card reads one step darker than its parent.
@@ -132,7 +132,7 @@ TSharedRef<FSlateStyleSet> FOptimizeStyle::Create()
 	// clearly even when it sits on a same-toned card; teal on hover (Palatial's
 	// ClickedButtonStyle shape).
 	{
-		const FLinearColor Control      = FLinearColor(FColor(0x34, 0x3A, 0x42));
+		const FLinearColor Control       = FLinearColor(FColor(0x34, 0x3A, 0x42));
 		const FLinearColor ControlEdge   = FLinearColor(FColor(0x47, 0x4E, 0x57));
 		const FLinearColor ControlHover  = FLinearColor(FColor(0x3D, 0x44, 0x4D));
 		FButtonStyle Secondary;

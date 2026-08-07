@@ -41,14 +41,12 @@ namespace
 
 bool FFindingNavigator::CanNavigate(const FFinding& Finding)
 {
-	if (Finding.TargetAsset.IsValid() || Finding.TargetActor.IsValid()
-		|| Finding.Scope == EFindingScope::Project || Finding.Scope == EFindingScope::System)
+	if (Finding.TargetAsset.IsValid() || Finding.TargetActor.IsValid() || Finding.Scope == EFindingScope::Project || Finding.Scope == EFindingScope::System)
 	{
 		return true;
 	}
 
-	return Finding.RelatedActors.ContainsByPredicate(
-		[](const TWeakObjectPtr<AActor>& Actor) { return Actor.IsValid(); });
+	return Finding.RelatedActors.ContainsByPredicate([](const TWeakObjectPtr<AActor>& Actor) { return Actor.IsValid(); });
 }
 
 FText FFindingNavigator::GetActionLabel(const FFinding& Finding)
@@ -118,6 +116,10 @@ void FFindingNavigator::OpenProjectRenderingSettings(FName FindingTypeId)
 	if (FindingTypeId == TEXT("Project.OcclusionCullingDisabled"))
 	{
 		SearchText = LOCTEXT("SearchOcclusionCulling", "Occlusion Culling");
+	}
+	else if (FindingTypeId == TEXT("Project.TextureStreamingDisabled"))
+	{
+		SearchText = LOCTEXT("SearchTextureStreaming", "Texture Streaming");
 	}
 	else if (FindingTypeId == TEXT("Project.AllShaderPermutations"))
 	{

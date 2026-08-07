@@ -21,8 +21,7 @@ namespace
 		TMap<UTexture2D*, TWeakObjectPtr<AActor>> Owners;
 	};
 
-	void GatherRole(UMaterialInterface& Material, EMaterialProperty Property,
-		TSet<UTexture2D*>& OutSet, FTextureRoles& Roles, AActor* Owner)
+	void GatherRole(UMaterialInterface& Material, EMaterialProperty Property, TSet<UTexture2D*>& OutSet, FTextureRoles& Roles, AActor* Owner)
 	{
 		TArray<UTexture*> Textures;
 		if (!Material.GetTexturesInPropertyChain(Property, Textures, nullptr, nullptr))

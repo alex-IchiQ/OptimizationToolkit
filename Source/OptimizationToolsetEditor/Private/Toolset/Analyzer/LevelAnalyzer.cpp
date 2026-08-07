@@ -9,10 +9,10 @@
 #include "Misc/PackageName.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
-#include "Engine/Light.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/LightComponent.h"
 #include "Components/LightComponentBase.h"
 #include "Components/MeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -66,7 +66,7 @@ namespace
 				}
 
 				UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(MeshComponent);
-				UStaticMesh* Mesh = StaticMeshComponent ? StaticMeshComponent->GetStaticMesh() : nullptr;
+				const UStaticMesh* Mesh = StaticMeshComponent ? StaticMeshComponent->GetStaticMesh() : nullptr;
 				if (!Mesh)
 				{
 					continue;
@@ -122,8 +122,7 @@ FScanResult FLevelAnalyzer::AnalyzeCurrentLevel(const TSet<FName>& ExcludedLevel
 	if (const UOptimizationToolsetSettings* Settings = GetDefault<UOptimizationToolsetSettings>())
 	{
 		Thresholds.NaniteCandidateTriangles = FMath::Max(1, Settings->NaniteCandidateTriangles);
-		Thresholds.NaniteMinimumTriangles = FMath::Clamp(
-			Settings->NaniteMinimumTriangles, 0, FMath::Max(0, Thresholds.NaniteCandidateTriangles - 1));
+		Thresholds.NaniteMinimumTriangles = FMath::Clamp(Settings->NaniteMinimumTriangles, 0, FMath::Max(0, Thresholds.NaniteCandidateTriangles - 1));
 		Thresholds.ExcessiveTriangles = FMath::Max(Thresholds.NaniteCandidateTriangles, Settings->ExcessiveTriangles);
 		Thresholds.OversizedTextureSize = FMath::Max(1, Settings->OversizedTextureSize);
 		Thresholds.TextureDensityBudget = FMath::Max(128, Settings->TextureDensityBudget);
@@ -148,8 +147,7 @@ FScanResult FLevelAnalyzer::AnalyzeCurrentLevel(const TSet<FName>& ExcludedLevel
 	{
 		AActor* Actor = *It;
 
-		const ULevel* ActorLevel = Actor->GetLevel();
-		if (ActorLevel && ExcludedLevelPackages.Contains(ActorLevel->GetOutermost()->GetFName()))
+		if (const ULevel* ActorLevel = Actor->GetLevel(); ActorLevel && ExcludedLevelPackages.Contains(ActorLevel->GetOutermost()->GetFName()))
 		{
 			continue;
 		}
@@ -160,9 +158,17 @@ FScanResult FLevelAnalyzer::AnalyzeCurrentLevel(const TSet<FName>& ExcludedLevel
 		{
 			Context.StaticMeshActors.Add(StaticMeshActor);
 		}
-		else if (ALight* Light = Cast<ALight>(Actor))
+
+		TInlineComponentArray<UStaticMeshComponent*> StaticMeshComponents(Actor);
+		Context.StaticMeshComponents.Append(StaticMeshComponents);
+
+		TInlineComponentArray<ULightComponent*> LightComponents(Actor);
+		for (ULightComponent* LightComponent : LightComponents)
 		{
-			Context.Lights.Add(Light);
+			if (LightComponent)
+			{
+				Context.Lights.Add(LightComponent);
+			}
 		}
 	}
 	Result.ActorsScanned = Context.Actors.Num();
@@ -181,9 +187,7 @@ FScanResult FLevelAnalyzer::AnalyzeCurrentLevel(const TSet<FName>& ExcludedLevel
 	// corresponding target while the mistake is still local to that pass.
 	for (const FFinding& Finding : Result.Findings)
 	{
-		ensureMsgf(HasValidScopeTarget(Finding),
-			TEXT("Finding '%s' has scope %d but no compatible target."),
-			*Finding.TypeId.ToString(), static_cast<int32>(Finding.Scope));
+		ensureMsgf(HasValidScopeTarget(Finding), TEXT("Finding '%s' has scope %d but no compatible target."), *Finding.TypeId.ToString(), static_cast<int32>(Finding.Scope));
 	}
 
 	// Stamp the sub-level onto every finding that points at an actor. Done here,
