@@ -1,4 +1,4 @@
-# Optimization / Profiling Toolkit — Quick Start
+# Ultimate Optimization Toolkit — Quick Start
 
 ## Installation
 
@@ -6,14 +6,14 @@
 
 1. Add the plugin to your Fab library and install it for the matching Unreal
    Engine version.
-2. Open the target project and enable **Optimization / Profiling Toolkit** under
+2. Open the target project and enable **Ultimate Optimization Toolkit** under
    **Edit → Plugins** if it is not already enabled.
 3. Restart the editor when prompted.
 
 ### Install into a project manually
 
 1. Copy the plugin folder to
-   `<YourProject>/Plugins/OptimizationToolset`.
+   `<YourProject>/Plugins/OptimizationToolkit`.
 2. Regenerate project files and build the editor target, or allow Unreal Engine
    to compile the plugin when the project opens.
 3. Enable the plugin under **Edit → Plugins** and restart the editor if prompted.
@@ -26,7 +26,7 @@ does not require Blueprint setup.
 1. Open the map you want to analyze. Load any sub-levels that should participate
    in the scan.
 2. Open the toolkit using the **Optimize** toolbar button or
-   **Window → Optimization Toolset**.
+   **Window → Ultimate Optimization Toolkit**.
 3. On the Dashboard, review **Scanning Scope** and disable any loaded level that
    should be excluded.
 4. Optionally adjust the analysis thresholds on the Dashboard.

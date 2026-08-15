@@ -7,8 +7,8 @@
 
 #include "OptimizationToolsetSettings.generated.h"
 
-/** Project-wide thresholds used by Optimization Toolset analyze passes. */
-UCLASS(Config=Editor, DefaultConfig, meta=(DisplayName="Optimization Toolset"))
+/** Project-wide thresholds used by Ultimate Optimization Toolkit analyze passes. */
+UCLASS(Config=Editor, DefaultConfig, meta=(DisplayName="Ultimate Optimization Toolkit"))
 class OPTIMIZATIONTOOLSETEDITOR_API UOptimizationToolsetSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()

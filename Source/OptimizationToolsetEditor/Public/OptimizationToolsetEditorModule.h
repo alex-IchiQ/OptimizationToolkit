@@ -12,7 +12,7 @@ class FSpawnTabArgs;
  * Editor module entry point.
  *
  * Owns lifetime of the Slate style, registers the dockable "Optimization
- * Toolset" tab and adds an entry to the Level Editor toolbar + Window menu.
+ * Toolkit" tab and adds an entry to the Level Editor toolbar + Window menu.
  */
 class FOptimizationToolsetEditorModule : public IModuleInterface
 {

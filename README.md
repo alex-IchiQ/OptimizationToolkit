@@ -2,7 +2,7 @@
   <img src="Resources/Cover.png" alt="Optimization Toolkit" width="100%">
 </p>
 
-<h1 align="center">Optimization / Profiling Toolkit</h1>
+<h1 align="center">Ultimate Optimization Toolkit</h1>
 
 👉 **[Buy on Unreal Engine Marketplace / Fab](https://www.fab.com/sellers/IchiQ)**
 
@@ -18,11 +18,11 @@ levels from one dockable Slate panel.
 
 ## Install
 
-1. Copy the plugin to `<Project>/Plugins/OptimizationToolset`.
+1. Copy the plugin to `<Project>/Plugins/OptimizationToolkit`.
 2. Regenerate project files and build the editor target, or let Unreal compile
    it on launch.
-3. Open **Optimization Toolset** from the **Optimize** toolbar button or
-   **Window → Optimization Toolset**.
+3. Open **Ultimate Optimization Toolkit** from the **Optimize** toolbar button or
+   **Window → Ultimate Optimization Toolkit**.
 
 ## First use
 

@@ -24,7 +24,7 @@ void FOptimizationToolsetEditorModule::StartupModule()
 
 	// Register the dockable tab.
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(ToolsetTabName, FOnSpawnTab::CreateRaw(this, &FOptimizationToolsetEditorModule::SpawnToolsetTab))
-		.SetDisplayName(LOCTEXT("TabTitle", "Optimization Toolkit"))
+		.SetDisplayName(LOCTEXT("TabTitle", "Ultimate Optimization Toolkit"))
 		.SetTooltipText(LOCTEXT("TabTooltip", "Analyze, optimize and profile the current level."))
 		.SetGroup(WorkspaceMenu::GetMenuStructure().GetToolsCategory())
 		.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.StatsViewer"));
@@ -70,8 +70,8 @@ void FOptimizationToolsetEditorModule::RegisterMenus()
 		FToolMenuSection& Section = Menu->FindOrAddSection("WindowLayout");
 		Section.AddMenuEntry(
 			"OpenOptimizationToolkit",
-			LOCTEXT("MenuEntry", "Optimization Toolkit"),
-			LOCTEXT("MenuEntryTip", "Open the Optimization / Profiling Toolkit."),
+			LOCTEXT("MenuEntry", "Ultimate Optimization Toolkit"),
+			LOCTEXT("MenuEntryTip", "Open Ultimate Optimization Toolkit."),
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.StatsViewer"),
 			FUIAction(FExecuteAction::CreateRaw(this, &FOptimizationToolsetEditorModule::OpenToolsetTab)));
 	}
@@ -84,7 +84,7 @@ void FOptimizationToolsetEditorModule::RegisterMenus()
 			"OpenOptimizationToolset",
 			FUIAction(FExecuteAction::CreateRaw(this, &FOptimizationToolsetEditorModule::OpenToolsetTab)),
 			LOCTEXT("ToolbarLabel", "Optimize"),
-			LOCTEXT("ToolbarTip", "Open the Optimization / Profiling Toolkit."),
+			LOCTEXT("ToolbarTip", "Open Ultimate Optimization Toolkit."),
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.StatsViewer"));
 		Section.AddEntry(Entry);
 	}

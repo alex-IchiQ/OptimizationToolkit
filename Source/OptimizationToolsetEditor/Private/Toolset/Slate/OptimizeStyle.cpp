@@ -238,7 +238,7 @@ TSharedRef<FSlateStyleSet> FOptimizeStyle::Create()
 
 	// --- Plugin resources ----------------------------------------------------
 	// SVGs are authored white so their tint follows the current nav state.
-	if (const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("OptimizationToolset")))
+	if (const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("OptimizationToolkit")))
 	{
 		const FString Resources = Plugin->GetBaseDir() / TEXT("Resources");
 		const FVector2D NavIconSize(18.0f, 18.0f);
