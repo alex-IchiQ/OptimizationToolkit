@@ -79,7 +79,7 @@ namespace
 		return !Node.IsMember() && Node.Children.Num() > 0;
 	}
 
-	const UStaticMesh* MeshFromNode(const FAffectedNode& Node)
+	const UStaticMesh* ResolveStaticMeshFromAffectedNode(const FAffectedNode& Node)
 	{
 		if (Node.IsMember())
 		{
@@ -139,7 +139,7 @@ namespace
 		{
 			return LOCTEXT("KindTexture", "Texture");
 		}
-		if (MeshFromNode(Node))
+		if (ResolveStaticMeshFromAffectedNode(Node))
 		{
 			return LOCTEXT("KindStaticMesh", "Static Mesh");
 		}
@@ -176,13 +176,13 @@ namespace
 			{ OptimizeColumns::Object, LOCTEXT("ColObject", "Object"), 3.0f, HAlign_Left, &NodeName },
 			{ FName("Type"), LOCTEXT("ColType", "Type"), 2.0f, HAlign_Left, &NodeType },
 			{ FName("LOD"), LOCTEXT("ColLOD", "LODs"), 1.0f, HAlign_Center,
-				[](const FAffectedNode& N) { const UStaticMesh* M = MeshFromNode(N); return M ? FText::AsNumber(M->GetNumLODs()) : Dash; } },
+				[](const FAffectedNode& N) { const UStaticMesh* M = ResolveStaticMeshFromAffectedNode(N); return M ? FText::AsNumber(M->GetNumLODs()) : Dash; } },
 			{ FName("Nanite"), LOCTEXT("ColNanite", "Nanite"), 1.0f, HAlign_Center,
-				[](const FAffectedNode& N) { const UStaticMesh* M = MeshFromNode(N); return M ? (M->IsNaniteEnabled() ? LOCTEXT("Yes", "Yes") : LOCTEXT("No", "No")) : Dash; } },
+				[](const FAffectedNode& N) { const UStaticMesh* M = ResolveStaticMeshFromAffectedNode(N); return M ? (M->IsNaniteEnabled() ? LOCTEXT("Yes", "Yes") : LOCTEXT("No", "No")) : Dash; } },
 			{ FName("Tris"), LOCTEXT("ColTris", "Triangles"), 1.6f, HAlign_Right,
-				[](const FAffectedNode& N) { const UStaticMesh* M = MeshFromNode(N); return M ? FText::AsNumber(M->GetNumTriangles(0)) : Dash; } },
+				[](const FAffectedNode& N) { const UStaticMesh* M = ResolveStaticMeshFromAffectedNode(N); return M ? FText::AsNumber(M->GetNumTriangles(0)) : Dash; } },
 			{ FName("Verts"), LOCTEXT("ColVerts", "Verts"), 1.6f, HAlign_Right,
-				[](const FAffectedNode& N) { const UStaticMesh* M = MeshFromNode(N); return M ? FText::AsNumber(M->GetNumVertices(0)) : Dash; } },
+				[](const FAffectedNode& N) { const UStaticMesh* M = ResolveStaticMeshFromAffectedNode(N); return M ? FText::AsNumber(M->GetNumVertices(0)) : Dash; } },
 		};
 	}
 
