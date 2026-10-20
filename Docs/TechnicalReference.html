@@ -1,0 +1,635 @@
+<meta charset="utf-8">
+<title>Optimization Toolkit Internals</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky table of contents on the left, one reading column on the right; stacks on phones.
+   Palette follows the plugin's own FOptimizeStyle (teal accent, charcoal surfaces, severity colours). */
+:root {
+  --bg: #f6f8f8;
+  --surface: #ffffff;
+  --sunken: #edf1f1;
+  --line: #d5dddc;
+  --fg: #172022;
+  --dim: #56666a;
+  --accent: #0e7f72;
+  --accent-soft: #d9f0ec;
+  --crit: #c8352b;
+  --major: #a86a00;
+  --minor: #2a6fb3;
+  --good: #1f8a4c;
+  --code-bg: #eef3f2;
+  --font-display: "Archivo", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121416; --surface: #1b1f22; --sunken: #212529; --line: #2e333a;
+    --fg: #e6e8eb; --dim: #9aa1a8; --accent: #2ad6c2; --accent-soft: #123a36;
+    --crit: #ef6a60; --major: #f5b23f; --minor: #6cb4f2; --good: #4fd88a; --code-bg: #171a1d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121416; --surface: #1b1f22; --sunken: #212529; --line: #2e333a;
+  --fg: #e6e8eb; --dim: #9aa1a8; --accent: #2ad6c2; --accent-soft: #123a36;
+  --crit: #ef6a60; --major: #f5b23f; --minor: #6cb4f2; --good: #4fd88a; --code-bg: #171a1d;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15.5px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.page { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 48px; }
+@media (max-width: 880px) { .page { grid-template-columns: minmax(0, 1fr); gap: 8px; } }
+
+nav.toc { position: sticky; top: env(safe-area-inset-top, 0px); align-self: start; padding-top: 40px; max-height: 100vh; overflow-y: auto; }
+nav.toc .label { font: 600 11px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin-bottom: 12px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+nav.toc li a { display: block; padding: 5px 10px; border-radius: 4px; text-decoration: none; color: var(--dim); font-size: 14px; }
+nav.toc li a:hover { background: var(--sunken); color: var(--fg); }
+@media (max-width: 880px) {
+  nav.toc { position: static; max-height: none; padding-top: 24px; border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+  nav.toc ol { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}
+
+main { min-width: 0; padding-top: 40px; }
+header.top { padding-bottom: 28px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.eyebrow { font: 600 12px/1 var(--font-mono); color: var(--accent); letter-spacing: .04em; margin-bottom: 14px; }
+h1 { font: 700 clamp(30px, 4.4vw, 44px)/1.08 var(--font-display); margin: 0 0 14px; text-wrap: balance; letter-spacing: -.01em; }
+.lede { max-width: 68ch; color: var(--dim); font-size: 17px; margin: 0; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.fact { font: 500 12.5px/1 var(--font-mono); padding: 7px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
+.fact b { color: var(--dim); font-weight: 400; margin-right: 6px; }
+
+section { padding-top: 44px; scroll-margin-top: 16px; }
+h2 { font: 700 26px/1.2 var(--font-display); margin: 0 0 6px; text-wrap: balance; }
+h3 { font: 600 18px/1.3 var(--font-display); margin: 30px 0 8px; }
+h4 { font: 600 15px/1.3 var(--font-body); margin: 22px 0 6px; }
+p, li { max-width: 72ch; }
+p { margin: 10px 0; }
+ul, ol { padding-left: 1.3em; }
+li { margin: 4px 0; }
+
+code { font-family: var(--font-mono); font-size: .86em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; font: 13px/1.55 var(--font-mono); margin: 14px 0; }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+.k { color: var(--accent); } .c { color: var(--dim); font-style: italic; } .s { color: var(--major); }
+
+.table-wrap { overflow-x: auto; margin: 14px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font: 600 11.5px/1.3 var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); background: var(--sunken); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; overflow-wrap: normal; }
+td.num { text-align: right; white-space: nowrap; }
+
+.sev { display: inline-block; font: 600 11px/1 var(--font-body); padding: 4px 7px; border-radius: 3px; border: 1px solid currentColor; white-space: nowrap; letter-spacing: .03em; }
+.sev.crit { color: var(--crit); } .sev.major { color: var(--major); } .sev.minor { color: var(--minor); } .sev.good { color: var(--good); }
+.nofix { color: var(--dim); font-style: italic; }
+
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 16px 0; }
+.flow .node { flex: 1 1 150px; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.flow .node.hl { border-color: var(--accent); background: var(--accent-soft); }
+.flow .node b { display: block; font: 500 12.5px/1.35 var(--font-mono); word-break: break-word; }
+.flow .node span { display: block; font-size: 12.5px; color: var(--dim); margin-top: 4px; line-height: 1.4; }
+.flow .arrow { align-self: center; color: var(--accent); font: 600 18px/1 var(--font-mono); }
+@media (max-width: 560px) { .flow { flex-direction: column; } .flow .arrow { transform: rotate(90deg); align-self: flex-start; margin-left: 16px; } }
+
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 14px 0; max-width: 76ch; }
+.note.warn { border-left-color: var(--major); }
+.note p { margin: 4px 0; }
+
+.issues { display: grid; gap: 10px; margin: 14px 0; }
+.issue { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; }
+.issue .sev { grid-row: span 2; align-self: start; margin-top: 3px; }
+.issue h4 { margin: 0; }
+.issue p { margin: 0; color: var(--dim); font-size: 14.5px; }
+
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 14px 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+.card h4 { margin-top: 0; font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--accent); }
+.card p { margin: 6px 0 0; font-size: 14.5px; }
+
+footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--dim); font-size: 13px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="page">
+<nav class="toc" aria-label="Contents">
+  <div class="label">Contents</div>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#build">Build and dependencies</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#scan">Scan lifecycle</a></li>
+    <li><a href="#types">Data model</a></li>
+    <li><a href="#passes">Analysis passes</a></li>
+    <li><a href="#fixes">Auto-fixes</a></li>
+    <li><a href="#cleanup">Clean Up and reports</a></li>
+    <li><a href="#ui">UI layer (Slate)</a></li>
+    <li><a href="#settings">Settings and thresholds</a></li>
+    <li><a href="#compat">Engine version support</a></li>
+    <li><a href="#extend">Extending the plugin</a></li>
+    <li><a href="#issues">Known issues and tech debt</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="top">
+  <div class="eyebrow">Source/OptimizationToolsetEditor · technical reference</div>
+  <h1>How Ultimate Optimization Toolkit works</h1>
+  <p class="lede">A reference for developers who will maintain or extend the plugin: how a level scan runs, where findings come from, how fixes and Undo work, where the module boundaries are, and what to check first.</p>
+  <div class="facts">
+    <span class="fact"><b>version</b>1.1.0</span>
+    <span class="fact"><b>module</b>OptimizationToolsetEditor</span>
+    <span class="fact"><b>type</b>Editor · PostEngineInit</span>
+    <span class="fact"><b>platforms</b>Win64, Mac</span>
+    <span class="fact"><b>UE</b>5.3–5.8 (uplugin: 5.8.0)</span>
+    <span class="fact"><b>passes / fixes / actions</b>9 / 10 / 2</span>
+  </div>
+</header>
+
+<section id="overview">
+  <h2>Overview</h2>
+  <p>The plugin is editor-only: one module, <code>OptimizationToolsetEditor</code>, with no runtime code, no content (<code>CanContainContent: false</code>) and no Blueprint API. The whole UI lives in one nomad tab, <code>OptimizationToolkit</code>, opened from the <b>Optimize</b> button on the Level Editor toolbar or from <b>Window → Ultimate Optimization Toolkit</b>.</p>
+  <p>Features come in three families. They don't know about each other and are registered in a shared registry:</p>
+  <div class="grid2">
+    <div class="card"><h4>IAnalyzePass</h4><p>A read-only check over the loaded level. Appends <code>FFinding</code> entries to the scan result.</p></div>
+    <div class="card"><h4>IOptimizationFix</h4><p>A transactional fix for one finding. Linked to findings by <code>FixId</code>.</p></div>
+    <div class="card"><h4>ICleanupAction</h4><p>A project-wide operation not tied to a finding (redirectors, saving packages). Usually not undoable.</p></div>
+  </div>
+  <p>On top of these sit five UI pages: <b>Dashboard</b>, <b>Optimize</b>, <b>Analyzer</b> (memory used by loaded content), <b>Profile</b> (stat commands and viewport visualizers) and <b>Clean Up</b> (unused assets and possible duplicates).</p>
+</section>
+
+<section id="build">
+  <h2>Build and dependencies</h2>
+  <p><code>OptimizationToolsetEditor.Build.cs</code>, PCH mode <code>UseExplicitOrSharedPCHs</code>.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Visibility</th><th>Modules</th></tr></thead>
+    <tbody>
+      <tr><td>Public</td><td><code>Core</code>, <code>CoreUObject</code>, <code>DeveloperSettings</code>, <code>Engine</code>, <code>InputCore</code>, <code>Slate</code>, <code>SlateCore</code></td></tr>
+      <tr><td>Private</td><td><code>Projects</code>, <code>UnrealEd</code>, <code>ToolMenus</code>, <code>LevelEditor</code>, <code>EditorFramework</code>, <code>EditorSubsystem</code>, <code>StaticMeshEditor</code>, <code>WorkspaceMenuStructure</code>, <code>ApplicationCore</code>, <code>RenderCore</code>, <code>MaterialEditor</code>, <code>RHI</code>, <code>AssetRegistry</code>, <code>AssetTools</code>, <code>EngineSettings</code>, <code>AssetManagerEditor</code>, <code>Settings</code></td></tr>
+    </tbody>
+  </table></div>
+  <p><code>AssetManagerEditor</code> comes from the built-in plugin of the same name. It supplies on-disk package sizes (<code>IAssetManagerEditorModule::DiskSizeName</code>) for <code>FBlueprintDependencyPass</code> and the Clean Up page.</p>
+  <p><code>Config/FilterPlugin.ini</code> adds <code>README.md</code>, <code>LICENSE.md</code> and the whole <code>Docs/</code> folder to every packaged FAB build, so this file ships too.</p>
+  <h3>Source layout</h3>
+<pre><code>Source/OptimizationToolsetEditor/
+  Public/
+    OptimizationToolsetEditorModule.h   <span class="c">// IModuleInterface: tab, menu, toolbar</span>
+    Toolset/
+      ToolsetTypes.h                    <span class="c">// FFinding, ESeverity, ECategory, EFindingScope, FScanResult, FAnalyzeThresholds</span>
+      ToolsetModel.h                    <span class="c">// FToolsetModel: state shared by every page</span>
+      ToolsetRegistry.h                 <span class="c">// FToolsetRegistry: passes / fixes / actions</span>
+      ToolsetCompat.h                   <span class="c">// OPTIMIZATION_* engine version macros</span>
+      OptimizationToolsetSettings.h     <span class="c">// UDeveloperSettings holding the thresholds</span>
+      Analyzer/  IAnalyzePass.h  LevelAnalyzer.h  LevelScanContext.h
+      Cleanup/   ICleanupAction.h  MemoryReport.h  ProjectSizeReport.h
+      Optimization/  IOptimizationFix.h
+  Private/
+    OptimizationToolsetEditorModule.cpp
+    Toolset/
+      Analyzer/LevelAnalyzer.cpp
+      Analyzer/Passes/                  <span class="c">// 9 passes, one class per file</span>
+      Optimization/Fixes/               <span class="c">// 10 fixes (3 in TextureSettingsFixes) + FixUtils.h</span>
+      Cleanup/Actions/                  <span class="c">// 2 project-wide actions</span>
+      Cleanup/MemoryReport.cpp, ProjectSizeReport.cpp
+      Navigation/FindingNavigator.*     <span class="c">// where a finding row's button takes you</span>
+      Slate/                            <span class="c">// SOptimizeShell + 5 pages + FOptimizeStyle</span>
+      ToolsetModel.cpp, ToolsetRegistry.cpp</code></pre>
+</section>
+
+<section id="architecture">
+  <h2>Architecture</h2>
+  <h3>Module startup</h3>
+  <div class="flow">
+    <div class="node"><b>StartupModule()</b><span>PostEngineInit phase</span></div>
+    <div class="arrow">→</div>
+    <div class="node"><b>FOptimizeStyle::Initialize()</b><span>"Opt.*" Slate style, icons from Resources/</span></div>
+    <div class="arrow">→</div>
+    <div class="node hl"><b>FToolsetRegistry::RegisterDefaults()</b><span>Reset, then register 9 / 10 / 2</span></div>
+    <div class="arrow">→</div>
+    <div class="node"><b>RegisterNomadTabSpawner</b><span>"OptimizationToolkit" tab</span></div>
+    <div class="arrow">→</div>
+    <div class="node"><b>RegisterMenus</b><span>via UToolMenus startup callback: Window menu and LevelEditorToolBar.User</span></div>
+  </div>
+  <p><code>RegisterDefaults()</code> clears its arrays first, so Live Coding and module reloads don't stack duplicates. <code>ShutdownModule()</code> removes the menus, the tab spawner (while Slate is still alive) and the style.</p>
+
+  <h3>Layers and dependency rules</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Layer</th><th>Classes</th><th>What it may know about</th></tr></thead>
+    <tbody>
+      <tr><td>Features</td><td><code>*Pass</code>, <code>*Fix</code>, <code>*Action</code></td><td>Only the types in <code>ToolsetTypes.h</code> and engine APIs. Nothing about each other or the UI.</td></tr>
+      <tr><td>Registry</td><td><code>FToolsetRegistry</code> (singleton)</td><td>Owns features through <code>TUniquePtr</code>. <code>FindFix(FixId)</code> is a linear search.</td></tr>
+      <tr><td>Orchestration</td><td><code>FLevelAnalyzer</code>, <code>FToolsetModel</code>, <code>FFindingNavigator</code></td><td>Registry, settings, editor. No knowledge of specific widgets.</td></tr>
+      <tr><td>UI</td><td><code>SOptimizeShell</code> and the pages</td><td>The model (a shared <code>TSharedPtr&lt;FToolsetModel&gt;</code>) and the reports. Pages don't know about each other.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note"><p>The code records why: the scan result and filters used to live on the main window widget, which grew to six panels and about 1,800 lines. Now each page takes only the model and reacts to <code>FToolsetModel::OnChanged()</code> instead of being called directly by whatever changed the state.</p></div>
+</section>
+
+<section id="scan">
+  <h2>Scan lifecycle</h2>
+  <p>The <b>Scan</b> button in the left navigation (<code>SOptimizeShell::OnScanClicked</code>) is the only entry point. It does four things in order:</p>
+  <ol>
+    <li><code>Model-&gt;RunScan()</code>: level analysis that feeds Dashboard and Optimize.</li>
+    <li><code>DashboardView-&gt;Scan()</code>: <code>FProjectSizeReport::Compute()</code> and a refresh of the level tree.</li>
+    <li><code>AnalyzerView-&gt;Scan()</code>: <code>FMemoryReport::Compute()</code>.</li>
+    <li><code>CleanupView-&gt;Scan()</code>: an Asset Registry walk under <code>/Game</code>, behind a cancellable slow-task dialog.</li>
+  </ol>
+
+  <h3>Level analysis: FLevelAnalyzer::AnalyzeCurrentLevel</h3>
+  <div class="flow">
+    <div class="node"><b>BuildExcludedLevelPackages()</b><span>which ULevels are excluded in Scanning Scope</span></div>
+    <div class="arrow">→</div>
+    <div class="node"><b>Settings → FAnalyzeThresholds</b><span>with clamps (see Settings)</span></div>
+    <div class="arrow">→</div>
+    <div class="node hl"><b>FLevelScanContext</b><span>one TActorIterator over all loaded levels; buckets Actors, StaticMeshActors, StaticMeshComponents, Lights</span></div>
+    <div class="arrow">→</div>
+    <div class="node"><b>GatherLevelStats</b><span>FLevelStats for the Dashboard</span></div>
+    <div class="arrow">→</div>
+    <div class="node hl"><b>Pass-&gt;Run() × 9</b><span>in registration order</span></div>
+    <div class="arrow">→</div>
+    <div class="node"><b>ensure scope · LevelName · Sort</b><span>Critical → Good, then by Title</span></div>
+  </div>
+  <p>Details that matter:</p>
+  <ul>
+    <li><b>One world walk.</b> Passes don't run their own <code>TActorIterator</code>; they iterate the context arrays. If a new pass needs another type, add a bucket to <code>FLevelScanContext</code> rather than a second walk.</li>
+    <li><b>Sub-levels.</b> <code>TActorIterator</code> covers the persistent level and every loaded sub-level. Unloaded ones can't be read at all. Actors in packages excluded on the Dashboard are skipped during the walk.</li>
+    <li><b>Scope contract.</b> After all passes, <code>ensureMsgf(HasValidScopeTarget(...))</code> checks that each finding has the target its <code>EFindingScope</code> requires. A mistake in a new pass surfaces immediately instead of in navigation.</li>
+    <li><b>LevelName</b> is set once by the analyzer from <code>TargetActor</code>, and only for non-persistent levels. Passes never fill it in.</li>
+    <li><b>Baseline.</b> <code>RunScan()</code> keeps the previous <code>FLevelStats</code> in <code>PreviousStats</code>, so the Dashboard can show deltas, including after the automatic rescan that follows a fix.</li>
+  </ul>
+
+  <h3>Invalidation</h3>
+  <p><code>FToolsetModel::InvalidateScan()</code> clears the whole result (baseline included) and broadcasts <code>OnChanged</code>. It runs whenever a threshold changes on the Dashboard or a level is toggled in Scanning Scope. This is deliberate: otherwise Optimize could apply a fix to an actor in a level the user just excluded.</p>
+
+  <h3>Applying fixes</h3>
+  <div class="flow">
+    <div class="node"><b>SOptimizeView::OnApplyClicked</b><span>collects the ticked rows</span></div>
+    <div class="arrow">→</div>
+    <div class="node"><b>FToolsetModel::ApplyFixes</b><span>array snapshot, FindFix(FixId), IsSupported()</span></div>
+    <div class="arrow">→</div>
+    <div class="node hl"><b>Fix-&gt;Apply(Finding)</b><span>its own FScopedTransaction per fix</span></div>
+    <div class="arrow">→</div>
+    <div class="node"><b>RunScan() once</b><span>OnChanged → every page redraws</span></div>
+  </div>
+  <p>For group findings (instancing candidates) the UI hands the fix a <b>copy</b> of the finding with <code>RelatedActors</code> narrowed to the actors the user ticked. If fewer than two are ticked, the group is skipped. The original finding is left unchanged.</p>
+</section>
+
+<section id="types">
+  <h2>Data model</h2>
+  <p>All types live in <code>Public/Toolset/ToolsetTypes.h</code>. The enums are deliberately not <code>UENUM</code>s: they never reach Blueprint or a <code>UPROPERTY</code>. If reflection is ever needed, the names must become globally unique (for example <code>EOptimizationSeverity</code>).</p>
+
+  <h3>FFinding</h3>
+  <p>A plain struct, not a UObject, so passes can create thousands cheaply. The default constructor is deleted: <code>TypeId</code>, severity, category, scope, title and subject are required.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Field</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>TypeId</code></td><td><code>FName</code></td><td>Stable, non-localized id for the kind of problem, e.g. <code>Mesh.MissingLODs</code>. Used for grouping in the Optimize tree and in the health score.</td></tr>
+      <tr><td><code>Severity</code></td><td><code>ESeverity</code></td><td>Critical, Major, Minor, Good. Drives sorting and colour.</td></tr>
+      <tr><td><code>Category</code></td><td><code>ECategory</code></td><td>Meshes, Materials, Textures, Lighting, Collision, Blueprints, Project.</td></tr>
+      <tr><td><code>Scope</code></td><td><code>EFindingScope</code></td><td>Asset, Actor, Level, Project, System. Decides which target must be set.</td></tr>
+      <tr><td><code>Title</code>, <code>Subject</code></td><td><code>FText</code></td><td>Problem title and object name.</td></tr>
+      <tr><td><code>WhyItMatters</code>, <code>HowToFix</code></td><td><code>FText</code></td><td>One sentence each: why it matters and what to do.</td></tr>
+      <tr><td><code>TargetActor</code></td><td><code>TWeakObjectPtr&lt;AActor&gt;</code></td><td>Actor to focus in the viewport.</td></tr>
+      <tr><td><code>TargetComponent</code></td><td><code>TWeakObjectPtr&lt;UActorComponent&gt;</code></td><td>The specific component when an actor has several (a light, a mesh with an incompatible material).</td></tr>
+      <tr><td><code>TargetAsset</code></td><td><code>TWeakObjectPtr&lt;UObject&gt;</code></td><td>The asset the finding is about. Navigation and fixes prefer it over the actor.</td></tr>
+      <tr><td><code>RelatedActors</code></td><td><code>TArray&lt;TWeakObjectPtr&lt;AActor&gt;&gt;</code></td><td>Every actor in a group finding, so a fix never has to re-derive the grouping rules.</td></tr>
+      <tr><td><code>FixId</code></td><td><code>FName</code></td><td>Id of a registered fix, or <code>NAME_None</code>.</td></tr>
+      <tr><td><code>LevelName</code></td><td><code>FText</code></td><td>Sub-level name. Filled in only by <code>FLevelAnalyzer</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Scope as a contract</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Scope</th><th>Required target</th><th>Navigation button</th></tr></thead>
+    <tbody>
+      <tr><td><code>Asset</code></td><td><code>TargetAsset</code></td><td>Show Asset → <code>GEditor-&gt;SyncBrowserToObject</code></td></tr>
+      <tr><td><code>Actor</code></td><td><code>TargetActor</code></td><td>Focus Actor → select + <code>MoveViewportCamerasToActor</code></td></tr>
+      <tr><td><code>Level</code></td><td><code>TargetActor</code> or at least one valid entry in <code>RelatedActors</code></td><td>Focus Actor</td></tr>
+      <tr><td><code>Project</code></td><td>Category <code>Project</code></td><td>Open Settings: Project Settings → Rendering, with search text filled in from the TypeId</td></tr>
+      <tr><td><code>System</code></td><td>none</td><td>Scan Again → <code>Model-&gt;RunScan()</code></td></tr>
+    </tbody>
+  </table></div>
+  <p><code>FFindingNavigator::OpenProjectRenderingSettings</code> opens the Settings Viewer, then uses an <code>FTSTicker</code> for up to 10 ticks to find the <code>SSearchBox</code> inside <code>SSettingsEditor</code>, because the settings editor resets its filter when it switches sections.</p>
+
+  <h3>Health score</h3>
+  <p><code>FScanResult::HealthScore()</code> starts at 100 and subtracts a penalty per finding. Penalties are grouped by <code>TypeId</code> and capped by the worst severity seen for that type. Two hundred movable lights count as one problem, not two hundred.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Severity</th><th class="num">Penalty per finding</th><th class="num">Cap per TypeId</th></tr></thead>
+    <tbody>
+      <tr><td><span class="sev crit">Critical</span></td><td class="num">12</td><td class="num">25</td></tr>
+      <tr><td><span class="sev major">Major</span></td><td class="num">5</td><td class="num">15</td></tr>
+      <tr><td><span class="sev minor">Minor</span></td><td class="num">1</td><td class="num">6</td></tr>
+      <tr><td><span class="sev good">Good</span></td><td class="num">0</td><td class="num">0</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>FLevelStats</h3>
+  <p>The scale of the level, not problems: <code>Actors</code>, <code>Meshes</code> (distinct <code>UStaticMesh</code> assets), <code>Triangles</code> (LOD0 × instance count for ISM/HISM, int64), <code>Materials</code> (distinct, excluding <code>/Engine/</code> and transient), <code>Lights</code> (every <code>ULightComponentBase</code>, including those on Blueprint actors). Skeletal meshes are deliberately left out of the triangle count because their render data may not be loaded.</p>
+</section>
+
+<section id="passes">
+  <h2>Analysis passes</h2>
+  <p>Listed in registration order. Every pass is <code>const</code> and changes nothing. Assets under <code>/Engine/</code> and transient objects are generally ignored.</p>
+
+  <h3>FStaticMeshPass <code>Pass_StaticMesh</code></h3>
+  <p>Asset problems are de-duplicated by <code>UStaticMesh</code>. Every <code>UStaticMeshComponent</code> is checked, including components on Blueprint actors.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>TypeId</th><th>Condition</th><th>Severity</th><th>Scope</th><th>FixId</th></tr></thead>
+    <tbody>
+      <tr><td><code>Mesh.NaniteUnsupportedMaterial</code></td><td>Nanite on, and a component's effective material has a blend mode other than Opaque/Masked</td><td><span class="sev major">Major</span></td><td>Asset</td><td><code>Fix_DisableNanite</code></td></tr>
+      <tr><td><code>Mesh.EmptyMesh</code></td><td>Only an <code>AStaticMeshActor</code> with no mesh (Blueprint components are often filled at runtime)</td><td><span class="sev minor">Minor</span></td><td>Actor</td><td><code>Fix_DeleteEmptyMeshActor</code></td></tr>
+      <tr><td><code>Mesh.ComplexCollision</code></td><td><code>CTF_UseComplexAsSimple</code></td><td><span class="sev minor">Minor</span></td><td>Asset</td><td><code>Fix_SimpleCollision</code></td></tr>
+      <tr><td><code>Mesh.ExcessiveTriangles</code></td><td>No Nanite, LOD0 ≥ <code>ExcessiveTriangles</code></td><td><span class="sev crit">Critical</span></td><td>Asset</td><td><code>Fix_EnableNanite</code></td></tr>
+      <tr><td><code>Mesh.NaniteCandidate</code></td><td>No Nanite, LOD0 ≥ <code>NaniteCandidateTriangles</code> (only when not Excessive)</td><td><span class="sev major">Major</span></td><td>Asset</td><td><code>Fix_EnableNanite</code></td></tr>
+      <tr><td><code>Mesh.LowPolyNanite</code></td><td>Nanite on, LOD0 ≤ <code>NaniteMinimumTriangles</code> (0 disables the check)</td><td><span class="sev minor">Minor</span></td><td>Asset</td><td><code>Fix_DisableNanite</code></td></tr>
+      <tr><td><code>Mesh.MissingLODs</code></td><td>No Nanite, ≤ 1 LOD, LOD0 ≥ <code>NaniteCandidateTriangles</code></td><td><span class="sev major">Major</span></td><td>Asset</td><td><code>Fix_GenerateLODs</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>FTexturePass <code>Pass_Textures</code></h3>
+  <p>Collects <code>UTexture2D</code>s through <code>GetUsedTextures</code> and density through <code>GetStreamingRenderAssetInfoWithNULLRemoval</code>. Each texture uses its <b>largest</b> <code>TexelFactor</code>, its most stretched usage: if a texture's resolution is justified on a wall, extra density on a doorknob is the doorknob's UV problem, not the asset's. Density is <code>TextureSize × 100 / TexelFactor</code> texels per metre. Special-purpose LOD groups (UI, RenderTarget, Lightmap, Shadowmap, LUT, Terrain, Bokeh, IES, Pixels2D) are softened or skipped.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>TypeId</th><th>Condition</th><th>Severity</th><th>FixId</th></tr></thead>
+    <tbody>
+      <tr><td><code>Texture.Oversized</code> (density)</td><td>Streaming data exists and density &gt; <code>TextureDensityBudget</code></td><td><span class="sev major">Major</span> above 2× budget, otherwise <span class="sev minor">Minor</span>; VT and special groups always Minor</td><td class="nofix">none</td></tr>
+      <tr><td><code>Texture.Oversized</code> (fallback)</td><td>No streaming data, effective longest side (respecting <code>MaxTextureSize</code>) &gt; <code>OversizedTextureSize</code></td><td><span class="sev major">Major</span>; VT and special groups <span class="sev minor">Minor</span></td><td class="nofix">none</td></tr>
+      <tr><td><code>Texture.NonPowerOfTwo</code></td><td>Not power of two and <code>PowerOfTwoMode == None</code></td><td><span class="sev minor">Minor</span></td><td class="nofix">none</td></tr>
+      <tr><td><code>Texture.NonStreaming</code></td><td><code>NeverStream</code>, not VT, all mips &gt; 256 KB</td><td><span class="sev major">Major</span> above 1 MB, otherwise <span class="sev minor">Minor</span></td><td><code>Fix_EnableStreaming</code></td></tr>
+      <tr><td><code>Texture.MipsDisabled</code></td><td>Pow2, ≥ 1024, <code>TMGS_NoMipmaps</code>, not VT</td><td><span class="sev major">Major</span> from 2048, otherwise <span class="sev minor">Minor</span></td><td class="nofix">none</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>FMaterialPass <code>Pass_Materials</code></h3>
+  <p>Shader stats come from the compiled shader map. When there isn't one (still compiling, or failed to compile), the sampler and instruction checks are skipped rather than reporting "0 instructions". The instruction count is the maximum over the representative shaders returned by <code>FMaterialStatsUtils::GetRepresentativeShaderTypesAndDescriptions</code>, the same selection the material editor's Stats panel uses.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>TypeId</th><th>Condition</th><th>Severity</th><th>Scope</th></tr></thead>
+    <tbody>
+      <tr><td><code>Material.SlotBudget</code></td><td>Slots &gt; <code>MaterialSlotBudget</code> (once per mesh)</td><td><span class="sev major">Major</span> above 2×, otherwise <span class="sev minor">Minor</span></td><td>Asset</td></tr>
+      <tr><td><code>Material.EmptySlots</code></td><td>Empty slots in a "mesh + effective materials" layout</td><td><span class="sev minor">Minor</span></td><td>Actor when the component overrides materials, otherwise Asset</td></tr>
+      <tr><td><code>Material.DuplicateSlots</code></td><td>One material in several slots</td><td><span class="sev minor">Minor</span></td><td>same as above</td></tr>
+      <tr><td><code>Material.SamplerCount</code></td><td>Samplers &gt; <code>MaterialSamplerBudget</code></td><td><span class="sev major">Major</span> from 16, otherwise <span class="sev minor">Minor</span></td><td>Asset</td></tr>
+      <tr><td><code>Material.InstructionCount</code></td><td>Worst shader &gt; <code>MaterialInstructionBudget</code></td><td><span class="sev major">Major</span> above 2×, otherwise <span class="sev minor">Minor</span></td><td>Asset</td></tr>
+      <tr><td><code>Material.Translucent</code></td><td>Translucent blend mode</td><td><span class="sev minor">Minor</span></td><td>Asset</td></tr>
+      <tr><td><code>Material.TwoSided</code></td><td><code>IsTwoSided()</code></td><td><span class="sev minor">Minor</span></td><td>Asset</td></tr>
+    </tbody>
+  </table></div>
+  <p>No material finding has an auto-fix.</p>
+
+  <h3>FLightingPass <code>Pass_Lighting</code></h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>TypeId</th><th>Condition</th><th>Severity</th><th>Scope</th><th>FixId</th></tr></thead>
+    <tbody>
+      <tr><td><code>Lighting.LightmapResolution</code></td><td>Static component whose effective lightmap resolution (override or mesh default) &gt; <code>LightmapResolutionBudget</code>. De-duplicated by (mesh, resolution), but a component override is always reported.</td><td><span class="sev major">Major</span> above 2×, otherwise <span class="sev minor">Minor</span></td><td>Actor for overrides, otherwise Asset</td><td class="nofix">none</td></tr>
+      <tr><td><code>Lighting.MovableLightOverBudget</code></td><td>Movable <code>ULightComponent</code>s in <b>one</b> <code>ULevel</code> &gt; <code>MovableLightBudget</code>. Level budgets are never summed. One finding per light in that level.</td><td><span class="sev major">Major</span></td><td>Level</td><td><code>Fix_ReviewLightMobility</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>FInstancingCandidatePass <code>Pass_InstancingCandidates</code></h3>
+  <p>A conservative detector. It only considers actors of exactly <code>AStaticMeshActor</code> (no subclasses), with static mobility, no attach parent or children, and no tags on the actor or component. A group is a match on <code>FInstancingKey</code>: level, mesh, Outliner folder, material array, collision profile/enabled/object type/responses, shadows, visibility and hidden flags, decals, occluder, custom depth and stencil, min/max draw distance, and lighting channels 0–2.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>TypeId</th><th>Condition</th><th>Severity</th><th>Scope</th><th>FixId</th></tr></thead>
+    <tbody>
+      <tr><td><code>Mesh.InstancingCandidate</code></td><td>Group has ≥ <code>InstancingCandidateCount</code> actors. Estimated draw submissions saved: <code>(N − 1) × max(1, slots)</code>.</td><td><span class="sev major">Major</span> when N ≥ 3× the threshold, otherwise <span class="sev minor">Minor</span></td><td>Level</td><td><code>Fix_ConvertToInstances</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>FProjectSettingsPass <code>Pass_ProjectSettings</code></h3>
+  <p>The only pass that reads <code>URendererSettings</code> and <code>URendererOverrideSettings</code> instead of the level. It has no auto-fixes on purpose: writing <code>DefaultEngine.ini</code> often needs an editor restart.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>TypeId</th><th>Condition</th><th>Severity</th></tr></thead>
+    <tbody>
+      <tr><td><code>Project.TextureStreamingDisabled</code></td><td>Streaming is off and the loaded levels use ≥ 20 ordinary streamable textures or ≥ 256 MB of full mips</td><td><span class="sev major">Major</span></td></tr>
+      <tr><td><code>Project.OcclusionCullingDisabled</code></td><td><code>bOcclusionCulling == false</code></td><td><span class="sev crit">Critical</span></td></tr>
+      <tr><td><code>Project.AllShaderPermutations</code></td><td><code>bSupportAllShaderPermutations</code></td><td><span class="sev major">Major</span></td></tr>
+      <tr><td><code>Project.StaticLightingWithLumen</code></td><td><code>bAllowStaticLighting</code> while GI is Lumen</td><td><span class="sev major">Major</span></td></tr>
+      <tr><td><code>Project.RayTracingEnabled</code></td><td><code>bEnableRayTracing</code></td><td><span class="sev minor">Minor</span></td></tr>
+      <tr><td><code>Project.RayTracingWithoutSkinCache</code></td><td>Ray tracing on without skin cache shaders (on 5.8: <code>SkinningShaderSupport == InlineShadersOnly</code>)</td><td><span class="sev major">Major</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>FBlueprintTickPass <code>Pass_BlueprintTick</code></h3>
+  <p><code>Blueprint.StaticActorTicksEveryFrame</code>, scope Asset, one finding per Blueprint class. Condition: Blueprint-generated class, <code>bCanEverTick</code> and <code>bStartWithTickEnabled</code>, <code>TickInterval == 0</code>, static root component. <span class="sev major">Major</span> from 10 instances, otherwise <span class="sev minor">Minor</span>. There is deliberately no fix: editing class defaults affects every instance in every level, and it would run under "Apply all" next to harmless mesh tweaks.</p>
+
+  <h3>FTextureCompressionPass <code>Pass_TextureCompression</code></h3>
+  <p>A texture's role comes from the material input it feeds (<code>GetTexturesInPropertyChain</code>), not from a filename suffix: Normal means a normal map; Roughness, Metallic, AO and Specular mean data; BaseColor and Emissive mean colour.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>TypeId</th><th>Condition</th><th>Severity</th><th>FixId</th></tr></thead>
+    <tbody>
+      <tr><td><code>Texture.NormalMapWrongCompression</code></td><td>Feeds Normal, compression is not <code>TC_Normalmap</code></td><td><span class="sev major">Major</span></td><td><code>Fix_NormalmapCompression</code></td></tr>
+      <tr><td><code>Texture.DataTextureSRGB</code></td><td>Feeds a data input, sRGB is on, and the texture is <b>not</b> also used as colour (packed maps are skipped)</td><td><span class="sev major">Major</span></td><td><code>Fix_DisableTextureSRGB</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>FBlueprintDependencyPass <code>Pass_BlueprintDependencies</code></h3>
+  <p>For each Blueprint package in the level, walks the graph of <b>hard</b> dependencies only (<code>EDependencyQuery::Hard</code>; the default query also returns soft ones, which was the pass's original bug). <code>/Script/</code> packages and maps (<code>PKG_ContainsMap</code>) are not walked. The root's own size is not counted. Sizes, dependencies and walkability are cached for the duration of the pass.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>TypeId</th><th>Condition</th><th>Severity</th><th>Scope</th></tr></thead>
+    <tbody>
+      <tr><td><code>Blueprint.HeavyDependencyChain</code></td><td>Total on disk ≥ <code>DependencyChainSizeMB</code>. HowToFix names the three heaviest packages.</td><td><span class="sev major">Major</span> from 4×, otherwise <span class="sev minor">Minor</span></td><td>Asset</td></tr>
+      <tr><td><code>Blueprint.DependencyCheckUnavailable</code></td><td>No AssetManagerEditor, Asset Registry still scanning, or no registry source</td><td><span class="sev minor">Minor</span></td><td>System</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn"><p><b>A line that looks unnecessary but isn't.</b> <code>EditorModule.GetCurrentRegistrySource()</code> is called only for its side effect. <code>FAssetManagerEditorModule</code> initializes its registry source lazily, while <code>GetIntegerValueForCustomColumn()</code> reads it directly and returns 0 for every package until it is initialized. Without this call the pass silently found nothing until the user happened to open a Size Map. <code>SCleanupView::BuildEntries</code> does the same. Don't remove it.</p></div>
+</section>
+
+<section id="fixes">
+  <h2>Auto-fixes</h2>
+  <p>Each fix opens its own <code>FScopedTransaction</code>, calls <code>Modify()</code> before changing anything, and re-checks state first, because the level may have changed between the scan and the click. <code>Apply()</code> returns <code>true</code> only when something actually changed. Asset fixes resolve the mesh with <code>OptimizationFixUtils::ResolveStaticMesh</code>: <code>TargetAsset</code> first, then the first <code>UStaticMeshComponent</code> on <code>TargetActor</code>.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>FixId</th><th>Class · button</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>Fix_EnableNanite</code></td><td><code>FEnableNaniteFix</code> · Enable Nanite</td><td><code>NaniteSettings.bEnabled = true</code> (on 5.7+ via <code>Get/SetNaniteSettings</code>); <code>PostEditChange</code> rebuilds the mesh.</td></tr>
+      <tr><td><code>Fix_DisableNanite</code></td><td><code>FDisableNaniteFix</code> · Disable Nanite</td><td>Same, with <code>false</code>.</td></tr>
+      <tr><td><code>Fix_GenerateLODs</code></td><td><code>FGenerateLODsFix</code> · Generate LODs</td><td><code>UStaticMeshEditorSubsystem::SetLodsWithNotification</code>: 100 / 50 / 25 / 10 % of triangles, automatic screen size. Cancels the transaction on failure.</td></tr>
+      <tr><td><code>Fix_SimpleCollision</code></td><td><code>FSimpleCollisionFix</code> · Use Simple Collision</td><td>Adds a box if there are no simple primitives, then sets <code>CTF_UseDefault</code>. Existing primitives are kept.</td></tr>
+      <tr><td><code>Fix_ReviewLightMobility</code></td><td><code>FReviewLightMobilityFix</code> · Set Stationary</td><td>Movable → Stationary on <code>TargetComponent</code>, if it still belongs to <code>TargetActor</code>.</td></tr>
+      <tr><td><code>Fix_DeleteEmptyMeshActor</code></td><td><code>FDeleteEmptyMeshActorFix</code> · Delete Actor</td><td>Deselects, then <code>EditorDestroyActor</code>, only if the mesh is still unassigned.</td></tr>
+      <tr><td><code>Fix_ConvertToInstances</code></td><td><code>FConvertToInstancesFix</code> · Convert to instances</td><td>See below.</td></tr>
+      <tr><td><code>Fix_NormalmapCompression</code></td><td><code>FNormalmapCompressionFix</code> · Fix compression</td><td><code>TC_Normalmap</code> and an explicit <code>SRGB = false</code>, then recompression.</td></tr>
+      <tr><td><code>Fix_DisableTextureSRGB</code></td><td><code>FDisableTextureSRGBFix</code> · Disable sRGB</td><td><code>SRGB = false</code>, then recompression.</td></tr>
+      <tr><td><code>Fix_EnableStreaming</code></td><td><code>FEnableStreamingFix</code> · Enable streaming</td><td><code>NeverStream = false</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>FConvertToInstancesFix in detail</h3>
+  <ol>
+    <li>Takes the live <code>AStaticMeshActor</code>s from <code>RelatedActors</code>; returns if fewer than two remain.</li>
+    <li>The first actor is the template. Every actor must pass <code>ComponentsMatch</code> (the pass's key rules, plus the same world and level) and <code>GUnrealEd-&gt;CanDeleteActor</code>. Any mismatch aborts the whole fix.</li>
+    <li>Spawns an empty <code>AActor</code> at the group's centroid in the same level, labelled <code>HISM_&lt;Mesh&gt;</code>, with the same folder and hidden flags.</li>
+    <li>Creates a <code>UHierarchicalInstancedStaticMeshComponent</code>, copies materials, collision, shadows, visibility, decals, occluder, custom depth, draw distances and lighting channels, registers it as the root component and adds the instances in world space.</li>
+    <li>Destroys the original actors in reverse order. If an actor can't be destroyed, its instance is removed instead (reverse order keeps indices stable). If none could be destroyed, the holder is removed and the transaction cancelled.</li>
+  </ol>
+  <div class="note"><p>A batch apply is N separate transactions, not one. Undoing an "Apply" over ten findings takes ten Ctrl+Z presses.</p></div>
+</section>
+
+<section id="cleanup">
+  <h2>Clean Up and reports</h2>
+  <h3>Clean Up list (<code>SCleanupView::BuildEntries</code>)</h3>
+  <p>Walks every asset under <code>/Game</code> behind a cancellable dialog. If the Asset Registry is still loading, the state is <code>RegistryBusy</code>. On cancel, partial results are discarded entirely (<code>Cancelled</code>).</p>
+  <p><b>Exclusions:</b> packages named in <code>UGameMapsSettings</code> (startup, transition, default and server maps, GameInstance, default GameMode); <code>__ExternalActors__</code> and <code>__ExternalObjects__</code> (World Partition); the <code>World</code> and <code>ObjectRedirector</code> classes.</p>
+  <div class="grid2">
+    <div class="card"><h4>Unused</h4><p><code>GetReferencers(..., EDependencyCategory::All)</code>, minus the package itself, is empty: nothing references the asset in the Asset Registry. Loading by string path or from config is invisible to this check.</p></div>
+    <div class="card"><h4>Possible duplicate</h4><p>Key <code>lower(name)|class|disk size</code>; a group of ≥ 2 assets from ≥ 2 different folders, size &gt; 0. A heuristic for a re-imported pack, not a content hash.</p></div>
+  </div>
+  <p>Deletion goes only through <code>ObjectTools::DeleteAssets(..., bShowConfirmation = true)</code>: Unreal re-checks references and offers force delete. The list is rebuilt afterwards.</p>
+
+  <h3>Project-wide actions</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Id</th><th>What it does</th><th>Destructive</th></tr></thead>
+    <tbody>
+      <tr><td><code>Cleanup_SaveDirtyPackages</code></td><td><code>FEditorFileUtils::SaveDirtyPackages</code>, then queries dirty packages again to report how many could not be written (read-only, not checked out).</td><td>no</td></tr>
+      <tr><td><code>Cleanup_FixUpRedirectors</code></td><td>Every <code>UObjectRedirector</code> under <code>/Game</code> → <code>IAssetTools::FixupReferencers</code>. The panel shows a Yes/No dialog first (<code>NeedsConfirmation()</code> defaults to <code>IsDestructive()</code>).</td><td>yes</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>FProjectSizeReport</h3>
+  <p>Package file sizes under <code>/Game</code>, grouped into 9 categories (<code>EAssetCategory</code>). The class → category mapping is an explicit table rather than a name prefix (otherwise "Material" would swallow MaterialParameterCollection); anything unlisted goes to Other. Each package is measured once, attributed to its first asset. Used by the Dashboard and by the group filter on Clean Up.</p>
+
+  <h3>FMemoryReport</h3>
+  <p>What loaded content costs in memory right now. Sources: <code>RHIGetTextureMemoryStats</code>, the texture streaming manager (pool size, over budget), and <code>TObjectIterator</code> over <code>UTexture2D</code>, <code>UTextureRenderTarget2D</code>, <code>UStaticMesh</code> and <code>USkeletalMesh</code>. Textures report both full and resident size. Here a texture's role (Diffuse, Normal, UI, Lightmap, Other) is guessed from its name. Lists are sorted by size and trimmed to <code>TopN = 200</code>.</p>
+</section>
+
+<section id="ui">
+  <h2>UI layer (Slate)</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Widget</th><th>Data source</th><th>What to know</th></tr></thead>
+    <tbody>
+      <tr><td><code>SOptimizeShell</code></td><td>Creates <code>FToolsetModel</code></td><td>168 px left navigation, <code>SWidgetSwitcher</code> indexed by <code>EOptimizeSection</code>, Scan and Docs buttons (Docs opens the README on GitHub).</td></tr>
+      <tr><td><code>SDashboardView</code></td><td>Model + its own <code>FProjectSizeReport</code></td><td>Getting Started, statistics with deltas, severity counts, project size, thresholds (custom rows with <code>SSpinBox</code>, not a details view), and Scanning Scope as a level tree. Changing a threshold writes config via <code>TryUpdateDefaultConfigFile()</code> and calls <code>InvalidateScan()</code>.</td></tr>
+      <tr><td><code>SOptimizeView</code></td><td>Model, subscribed to <code>OnChanged</code></td><td>A level → problem type tree, with a checkable tree of affected objects below it. Columns depend on the target type: texture, mesh or generic; groups get a Components column. Fixable rows start ticked. The selected TypeId is restored after a rescan.</td></tr>
+      <tr><td><code>SAnalyzerView</code></td><td>Its own <code>FMemoryReport</code></td><td>Summary bars (texture roles, streaming pool, GPU) and three sortable lists built on the <code>TMemoryList</code> / <code>TMemoryColumn</code> templates.</td></tr>
+      <tr><td><code>SProfileView</code></td><td>No model</td><td>Buttons are built from arrays of <code>FProfileAction</code> (command + <code>EViewModeIndex</code>): stat commands, complexity view modes, Nanite, Lumen, VSM, and a custom console command. Active state is read back from the viewport and CVars. Every view mode change first runs <code>r.Nanite.Visualize off</code>, otherwise the Nanite visualization keeps drawing.</td></tr>
+      <tr><td><code>SCleanupView</code></td><td>Its own list, action registry</td><td>All / Possible duplicates / Unused filters, group filter, search, select-all over visible rows, deletion through the engine's dialog.</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>Style.</b> <code>FOptimizeStyle</code> is the plugin's only style set (<code>OptimizeUIStyle</code>); brushes are prefixed <code>Opt.</code> with a 4 px radius. Colours are written as sRGB hex and converted to linear: accent <code>#17B9A6</code>, surfaces <code>#121416 / #181B1E / #212529</code>, severities <code>#EF4A3F / #F5A723 / #4AA3ED / #2ECC71</code>. Icons are SVGs in <code>Resources/</code>; the mascot is <code>vera.png</code>.</p>
+</section>
+
+<section id="settings">
+  <h2>Settings and thresholds</h2>
+  <p><code>UOptimizationToolsetSettings</code> (<code>UDeveloperSettings</code>, <code>Config=Editor, DefaultConfig</code>) appears under Project Settings → Plugins → Ultimate Optimization Toolkit. Values are stored in the project's <code>DefaultEditor.ini</code>, so the team shares them through version control. Defaults are <code>static constexpr Default_*</code> constants used by the initializers, <code>ResetToDefaults()</code> and the Dashboard's reset buttons. <code>FLevelAnalyzer</code> also clamps values when copying them into <code>FAnalyzeThresholds</code>.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Property</th><th class="num">Default</th><th>Analyzer clamp</th><th>Used by</th></tr></thead>
+    <tbody>
+      <tr><td><code>bIncludeSubLevels</code></td><td class="num">true</td><td>—</td><td>Initial state of sub-level toggles in Scanning Scope</td></tr>
+      <tr><td><code>NaniteMinimumTriangles</code></td><td class="num">2,000</td><td>[0, Candidate − 1]</td><td>LowPolyNanite</td></tr>
+      <tr><td><code>NaniteCandidateTriangles</code></td><td class="num">20,000</td><td>≥ 1</td><td>NaniteCandidate, MissingLODs</td></tr>
+      <tr><td><code>ExcessiveTriangles</code></td><td class="num">500,000</td><td>≥ Candidate</td><td>ExcessiveTriangles</td></tr>
+      <tr><td><code>TextureDensityBudget</code></td><td class="num">2,048 tx/m</td><td>≥ 128</td><td>Texture.Oversized (density)</td></tr>
+      <tr><td><code>OversizedTextureSize</code></td><td class="num">4,096 px</td><td>≥ 1</td><td>Texture.Oversized (fallback)</td></tr>
+      <tr><td><code>MaterialSlotBudget</code></td><td class="num">8</td><td>≥ 1</td><td>Material.SlotBudget</td></tr>
+      <tr><td><code>MaterialSamplerBudget</code></td><td class="num">12</td><td>≥ 1</td><td>Material.SamplerCount</td></tr>
+      <tr><td><code>MaterialInstructionBudget</code></td><td class="num">300</td><td>≥ 50</td><td>Material.InstructionCount</td></tr>
+      <tr><td><code>MovableLightBudget</code></td><td class="num">24 per level</td><td>≥ 0</td><td>Lighting.MovableLightOverBudget</td></tr>
+      <tr><td><code>LightmapResolutionBudget</code></td><td class="num">512</td><td>≥ 32</td><td>Lighting.LightmapResolution</td></tr>
+      <tr><td><code>InstancingCandidateCount</code></td><td class="num">10</td><td>≥ 2</td><td>Mesh.InstancingCandidate</td></tr>
+      <tr><td><code>DependencyChainSizeMB</code></td><td class="num">64 MB</td><td>≥ 1</td><td>Blueprint.HeavyDependencyChain</td></tr>
+    </tbody>
+  </table></div>
+  <p>Per-level Scanning Scope overrides live only in <code>FToolsetModel::LevelInclusionOverrides</code> for the lifetime of the tab and are never written to config. The persistent level is included by default.</p>
+</section>
+
+<section id="compat">
+  <h2>Engine version support</h2>
+  <p>One codebase builds for 5.3–5.8; on FAB each engine version is a separate build. Version branches go only through the macros in <code>ToolsetCompat.h</code>, inside the pass or fix that needs them.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Macro</th><th>Condition</th><th>Used in</th></tr></thead>
+    <tbody>
+      <tr><td><code>OPTIMIZATION_UE_VERSION_AT_LEAST(M, m)</code></td><td>—</td><td>Base macro, e.g. 5.7+ for <code>Get/SetNaniteSettings</code></td></tr>
+      <tr><td><code>OPTIMIZATION_HAS_NANITE</code></td><td>≥ 5.0</td><td>StaticMeshPass, Enable/DisableNaniteFix</td></tr>
+      <tr><td><code>OPTIMIZATION_HAS_VSM_CONTROLS</code></td><td>≥ 5.4</td><td>Declared, currently unused</td></tr>
+      <tr><td><code>OPTIMIZATION_HAS_MODERN_TSR</code></td><td>≥ 5.3</td><td>Declared, currently unused</td></tr>
+      <tr><td><code>OPTIMIZATION_HAS_SKINNING_SHADER_SUPPORT_MODE</code></td><td>≥ 5.8</td><td>ProjectSettingsPass: an enum instead of <code>bSupportSkinCacheShaders</code></td></tr>
+      <tr><td><code>OPTIMIZATION_MATERIAL_RESOURCE_BY_SHADER_PLATFORM</code></td><td>≥ 5.7</td><td>MaterialPass: on 5.7 the feature-level overload became <code>final</code> and returns null</td></tr>
+    </tbody>
+  </table></div>
+  <p>The <code>OPTIMIZATION_</code> prefix is required: the macros are global, and short names would clash with other plugins. The code uses C++20 features (init-statements in range-for, structured bindings).</p>
+</section>
+
+<section id="extend">
+  <h2>Extending the plugin</h2>
+  <h3>Adding an analysis pass</h3>
+<pre><code><span class="c">// Private/Toolset/Analyzer/Passes/DecalPass.h</span>
+<span class="k">class</span> FDecalPass : <span class="k">public</span> IAnalyzePass
+{
+<span class="k">public</span>:
+    <span class="k">virtual</span> FName GetId() <span class="k">const override</span> { <span class="k">return</span> TEXT(<span class="s">"Pass_Decals"</span>); }
+    <span class="k">virtual void</span> Run(<span class="k">const</span> FLevelScanContext&amp; Context, <span class="k">const</span> FAnalyzeThresholds&amp; T, FScanResult&amp; Out) <span class="k">const override</span>;
+};
+
+<span class="c">// .cpp: only read Context, only append to Out.Findings</span>
+FFinding F(TEXT(<span class="s">"Decal.Overlap"</span>), ESeverity::Minor, ECategory::Materials, EFindingScope::Actor,
+    LOCTEXT(<span class="s">"Title"</span>, <span class="s">"..."</span>), FText::FromString(Actor-&gt;GetActorNameOrLabel()));
+F.WhyItMatters = ...;
+F.HowToFix     = ...;
+F.TargetActor  = Actor;          <span class="c">// required for Scope::Actor, otherwise the ensure fires</span>
+Out.Findings.Add(MoveTemp(F));
+
+<span class="c">// ToolsetRegistry.cpp, RegisterDefaults()</span>
+AddPass(MakeUnique&lt;FDecalPass&gt;());</code></pre>
+  <ul>
+    <li>Don't walk the world yourself. If the bucket you need is missing, add it to <code>FLevelScanContext</code> and fill it in <code>AnalyzeCurrentLevel</code>.</li>
+    <li>De-duplicate by asset when the problem belongs to the asset. A hundred actors sharing one mesh should produce one finding.</li>
+    <li>If a check can't run, return a visible finding with scope <code>System</code> (see <code>MakeUnavailableFinding</code>) instead of returning quietly. Silence looks like a clean level.</li>
+    <li>New threshold: a property and <code>Default_*</code> constant in <code>UOptimizationToolsetSettings</code>, a line in <code>ResetToDefaults()</code>, a field in <code>FAnalyzeThresholds</code>, a clamp in the analyzer, and a row in <code>SDashboardView::BuildSettingsCard</code>.</li>
+    <li>For findings with scope <code>Project</code>, add a search string to <code>FFindingNavigator::OpenProjectRenderingSettings</code>.</li>
+  </ul>
+
+  <h3>Adding a fix</h3>
+<pre><code><span class="k">class</span> FMyFix : <span class="k">public</span> IOptimizationFix
+{
+<span class="k">public</span>:
+    <span class="k">virtual</span> FName GetId() <span class="k">const override</span> { <span class="k">return</span> TEXT(<span class="s">"Fix_MyFix"</span>); }   <span class="c">// = FFinding::FixId</span>
+    <span class="k">virtual</span> FText GetLabel() <span class="k">const override</span>;
+    <span class="k">virtual bool</span> IsSupported() <span class="k">const override</span> { <span class="k">return</span> GEditor != <span class="k">nullptr</span>; }
+    <span class="k">virtual bool</span> Apply(<span class="k">const</span> FFinding&amp; Finding) <span class="k">const override</span>
+    {
+        UStaticMesh* Mesh = OptimizationFixUtils::ResolveStaticMesh(Finding);
+        <span class="k">if</span> (!Mesh || <span class="c">/* already fixed */</span> ...) { <span class="k">return false</span>; }  <span class="c">// re-check state</span>
+        <span class="k">const</span> FScopedTransaction Tx(LOCTEXT(<span class="s">"Tx"</span>, <span class="s">"My fix"</span>));
+        Mesh-&gt;Modify();
+        <span class="c">// ... changes ...</span>
+        Mesh-&gt;PostEditChange();
+        Mesh-&gt;MarkPackageDirty();
+        <span class="k">return true</span>;
+    }
+};</code></pre>
+  <p>Rules: one transaction per <code>Apply</code>; <code>Transaction.Cancel()</code> on partial failure; no edits to class defaults or project settings from a fix. Anything with a wide blast radius should stay without a <code>FixId</code>, because "Apply" runs everything that's ticked at once.</p>
+
+  <h3>Adding a Clean Up action</h3>
+  <p>Implement <code>ICleanupAction</code> and call <code>AddAction(...)</code>. The panel builds its buttons from the registry. If the action rewrites or deletes assets, return <code>IsDestructive() = true</code>. If <code>Execute()</code> shows its own review dialog, override <code>NeedsConfirmation()</code> to return <code>false</code> so the user isn't asked twice. Check <code>IsLoadingAssets()</code> before relying on the Asset Registry.</p>
+</section>
+
+<section id="issues">
+  <h2>Known issues and tech debt</h2>
+  <p>Found while reading the source. The code was not compiled or run, so the build-related items need confirming on the relevant engine version.</p>
+  <div class="issues">
+    <div class="issue"><span class="sev major">Build</span><h4>AssetManagerEditor plugin dependency is not declared in the .uplugin</h4><p><code>Build.cs</code> links the <code>AssetManagerEditor</code> module, but <code>OptimizationToolkit.uplugin</code> has no <code>"Plugins"</code> section listing it. UBT warns about this, and if that plugin is disabled in a project the module may fail to load. That also makes the runtime <code>IAssetManagerEditorModule::IsAvailable()</code> check in BlueprintDependencyPass effectively unreachable. Add <code>{"Name": "AssetManagerEditor", "Enabled": true}</code>.</p></div>
+    <div class="issue"><span class="sev major">Build</span><h4><code>EAllowShrinking</code> on UE 5.3</h4><p><code>BlueprintDependencyPass.cpp</code> calls <code>Pending.Pop(EAllowShrinking::No)</code>. As far as I know this enum arrived in 5.4, while the README claims 5.3 support. Build on 5.3 to confirm, or branch with <code>OPTIMIZATION_UE_VERSION_AT_LEAST(5, 4)</code>.</p></div>
+    <div class="issue"><span class="sev minor">UI</span><h4>Footer version doesn't match the plugin</h4><p><code>SOptimizeShell::BuildNav</code> shows a hardcoded <code>v1.0.0</code>, while <code>VersionName</code> in the .uplugin is 1.1.0. Read it via <code>IPluginManager::FindPlugin(...)-&gt;GetDescriptor().VersionName</code> instead.</p></div>
+    <div class="issue"><span class="sev minor">UI</span><h4>Outdated hint text</h4><p><code>SOptimizeView::GetSummaryText</code> says "press Scan Level", but the button is labelled <b>Scan</b>.</p></div>
+    <div class="issue"><span class="sev minor">Code</span><h4>Unused filter API in FToolsetModel</h4><p><code>GetVisibleFindings</code>, <code>CountForCategory</code>, <code>SetSearchFilter</code>, <code>ToggleSeverity</code>, <code>SetCategoryFilter</code>, <code>PassesCategory</code> and the single <code>ApplyFix</code> are never called: Optimize builds its tree from <code>GetAllFindings()</code>. Either wire the filters into the UI or remove them. The health score isn't shown anywhere either.</p></div>
+    <div class="issue"><span class="sev minor">Data</span><h4>The Lights counter and LightingPass count different things</h4><p><code>GatherLevelStats</code> counts every <code>ULightComponentBase</code> (SkyLight included), while <code>FLevelScanContext::Lights</code> and the movable light budget use only <code>ULightComponent</code>. Dashboard numbers and findings can disagree.</p></div>
+    <div class="issue"><span class="sev minor">Data</span><h4>Two different ideas of a texture's role</h4><p><code>FTextureCompressionPass</code> derives the role from the material input, while <code>FMemoryReport</code> on the Analyzer page uses name suffixes (<code>_n</code>, <code>_d</code> and so on). Projects with a different naming scheme will see most textures under Other in Analyzer.</p></div>
+    <div class="issue"><span class="sev minor">UX</span><h4>Batch Apply isn't one transaction</h4><p>Each fix opens its own <code>FScopedTransaction</code>, so undoing a batch takes several Undo steps. An outer transaction in <code>FToolsetModel::ApplyFixes</code> would make it one step.</p></div>
+    <div class="issue"><span class="sev minor">Code</span><h4>Small things</h4><p>A comment in BlueprintDependencyPass refers to a HANDOFF document that isn't in the repository. A comment in <code>OnScanClicked</code> says the Dashboard computes a memory report, but it only computes project size. <code>OPTIMIZATION_HAS_VSM_CONTROLS</code> and <code>OPTIMIZATION_HAS_MODERN_TSR</code> are declared but unused.</p></div>
+  </div>
+</section>
+
+<footer>Written from the <code>Source/OptimizationToolsetEditor</code> sources, version 1.1.0. Update the matching tables when passes, fixes or thresholds change.</footer>
+</main>
+</div>
